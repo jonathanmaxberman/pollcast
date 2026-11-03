@@ -83,7 +83,7 @@ def sim_for(config: Config, cycle: int, **overrides) -> SimulateConfig:
 
 
 def replay_senate(config: Config, cycles: list[int], leads: list[int],
-                  n_sims: int = 5000) -> pd.DataFrame:
+                  n_sims: int = 5000, **sim_overrides) -> pd.DataFrame:
     """One row per (cycle, lead, race): the forecast as of then, and what happened."""
     results = senate_results(config)
     polls = build_polls(config)
@@ -91,7 +91,7 @@ def replay_senate(config: Config, cycles: list[int], leads: list[int],
     for cycle in cycles:
         actual = results[results["cycle"] == cycle]
         priors = priors_for(results, cycle)
-        sim = sim_for(config, cycle, n_sims=n_sims)
+        sim = sim_for(config, cycle, n_sims=n_sims, **sim_overrides)
         for lead in leads:
             as_of = ELECTION_DAYS[cycle] - timedelta(days=lead)
             inputs = state_inputs(config, sim, as_of, polls=polls, priors=priors, trend_days=0)
@@ -432,3 +432,34 @@ def plot_calibration(eve: pd.DataFrame, path: Path) -> Path:
     fig.savefig(path)
     plt.close(fig)
     return path
+
+
+def compare_house_effects(config: Config, cycles: list[int], leads: list[int], n_sims: int = 5000) -> dict:
+    """Replay with and without house effects and score both on the same races.
+
+    House effects are estimated from polls alone, never from results, so this
+    plain comparison is already out of sample. Races that only the adjusted
+    version can forecast from polls (all partisan polls) are matched on what
+    the baseline did with them (its prior), so both are scored on every race.
+    """
+    settings = dict(config.simulate.get("house_effects") or {})
+    off = replay_senate(config, cycles, leads, n_sims, house_effects={**settings, "enabled": False})
+    on = replay_senate(config, cycles, leads, n_sims, house_effects={**settings, "enabled": True})
+    key = ["cycle", "lead_days", "state", "special"]
+    both = off[key + ["p", "mean", "margin", "actual", "basis"]].merge(
+        on[key + ["p", "mean", "basis"]], on=key, suffixes=("_base", "_he"))
+    rows = []
+    for cycle, g in both.groupby("cycle"):
+        rows.append({"cycle": cycle, "n": len(g),
+                     "log_loss_base": log_loss(g["p_base"], g["actual"]),
+                     "log_loss_he": log_loss(g["p_he"], g["actual"]),
+                     "mae_base": float((g["margin"] - g["mean_base"]).abs().mean()),
+                     "mae_he": float((g["margin"] - g["mean_he"]).abs().mean()),
+                     "newly_polled": int(((g["basis_base"] != "polls") & (g["basis_he"] == "polls")).sum())})
+    table = pd.DataFrame(rows)
+    table["improvement"] = table["log_loss_base"] - table["log_loss_he"]
+    base, he = log_loss(both["p_base"], both["actual"]), log_loss(both["p_he"], both["actual"])
+    return {"table": table, "log_loss_base": base, "log_loss_he": he, "improvement": base - he,
+            "cycles_improved": int((table["improvement"] > 0).sum()), "cycles": len(table),
+            "accepted": bool(he < base and (table["improvement"] > 0).sum() >= len(table) / 2),
+            "races": both}

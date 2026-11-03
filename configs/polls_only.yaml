@@ -178,6 +178,11 @@ simulate:
   seats_not_up: {DEM: 34, REP: 31}
   rep_control_seats: 50 # Vice President Vance breaks ties
   average: {half_life_days: 21, max_age_days: 365}
+  # Pollster house effects (538-style). Backtest 2026-11-03: adjusting AND
+  # including partisan polls failed (0.1928 -> 0.1977); pollster effects on
+  # nonpartisan polls only passed as a post-hoc split (0.1928 -> 0.1912, 3/4).
+  # Off until you turn it on; partisan_weight 0 keeps partisan polls out.
+  house_effects: {enabled: false, partisan_weight: 0.0, prior_polls: 3.0, half_life_days: 45.0}
   # The NYT files record Nebraska's independent Dan Osborn as a Democrat.
   party_overrides:
     Nebraska: {Dan Osborn: IND}

@@ -23,7 +23,7 @@ from datetime import UTC, date, datetime
 import numpy as np
 import pandas as pd
 
-from pollcast.average import main_challenger, time_weighted_average
+from pollcast.average import main_challenger, poll_margins, time_weighted_average
 from pollcast.config import Config
 from pollcast.pipeline import build_polls
 from pollcast.calendar import days_to_election
@@ -49,11 +49,60 @@ class SimulateConfig:
     seats_not_up: dict[str, int] = field(default_factory=lambda: {"DEM": 34, "REP": 31})
     # Republicans control with this many seats (50 when the vice president is a Republican).
     rep_control_seats: int = 50
+    # Pollster and partisan-sponsor house effects (see HouseEffects).
+    house_effects: dict = field(default_factory=dict)
     # Settings passed through to the per-state polling average.
     average: dict = field(default_factory=lambda: {"half_life_days": 21, "max_age_days": 365})
     # Fix a candidate's party where a source records it differently from how
     # they run, e.g. {"Nebraska": {"Dan Osborn": "IND"}}.
     party_overrides: dict = field(default_factory=dict)
+
+
+@dataclass
+class HouseEffects:
+    """538-style house effects: estimate each pollster's lean, subtract it, keep the poll.
+
+    A poll's residual is its margin minus its race's average of nonpartisan
+    polls as of the forecast date. A pollster's effect is the recency-weighted
+    mean residual over all its polls in the cycle, shrunk toward zero as if it
+    had `prior_polls` extra polls with no lean. Partisan polls are grouped by
+    pollster and sponsor party, and fall back on their sponsor party's pooled
+    effect when a group has no residuals. Every adjusted poll, partisan ones
+    included, then enters the average (partisan ones at `partisan_weight`).
+    Uses only polls released by the forecast date.
+    """
+
+    enabled: bool = False
+    prior_polls: float = 3.0
+    half_life_days: float = 45.0
+    partisan_weight: float = 1.0
+
+
+def _group(pollster, partisan) -> str:
+    return f"{pollster}|{partisan or ''}"
+
+
+def estimate_house_effects(race_margins: dict, averages: dict, he: HouseEffects, as_of: date) -> dict:
+    """{group: effect} from residuals against each race's nonpartisan average."""
+    rows = []
+    for race, m in race_margins.items():
+        if race not in averages or m.empty:
+            continue
+        age = (pd.Timestamp(as_of) - m["midpoint"]).dt.days.clip(lower=0)
+        rows.append(pd.DataFrame({"group": [_group(p, s) for p, s in zip(m["pollster"], m["partisan"].fillna(""))],
+                                  "sponsor": m["partisan"].fillna(""),
+                                  "resid": m["margin"] - averages[race],
+                                  "w": 0.5 ** (age / he.half_life_days)}))
+    if not rows:
+        return {}
+    r = pd.concat(rows)
+    effects = {}
+    for g, d in r.groupby("group"):
+        effects[g] = float((d["w"] * d["resid"]).sum() / (d["w"].sum() + he.prior_polls))
+    # Sponsor-party fallback for partisan groups never seen against an average.
+    for party, d in r[r["sponsor"] != ""].groupby("sponsor"):
+        effects[f"*|{party}"] = float((d["w"] * d["resid"]).sum() / (d["w"].sum() + he.prior_polls))
+    return effects
 
 
 def _t_draws(rng: np.random.Generator, df: float, sd: float, size) -> np.ndarray:
@@ -89,11 +138,37 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
     base_avg = replace(config.average, race_type=sim.race_type, cycle=sim.cycle, **sim.average)
 
     races = set(zip(polls["state"], polls["special"])) | set(zip(priors["state"], priors["special"]))
+    races = sorted(r for r in races if r[0])
+    he = HouseEffects(**sim.house_effects)
+    effects = {}
+    if he.enabled:
+        # First pass: each race's nonpartisan average, and all its polls, partisan included.
+        race_margins, averages = {}, {}
+        for state, special in races:
+            race_polls = polls[(polls["state"] == state) & (polls["special"] == special)]
+            cfg = replace(base_avg, state=state)
+            challenger, nonpartisan = main_challenger(race_polls, cfg)
+            avg = time_weighted_average(nonpartisan, cfg, start=as_of, end=as_of) if len(nonpartisan) else nonpartisan
+            if len(avg):
+                averages[(state, special)] = float(avg["margin"].iloc[-1])
+            race_margins[(state, special)] = poll_margins(race_polls, replace(cfg, exclude_partisan=False),
+                                                          challenger=challenger)
+        effects = estimate_house_effects(race_margins, averages, he, as_of)
+
     rows = []
-    for state, special in sorted(r for r in races if r[0]):
+    for state, special in races:
         race_polls = polls[(polls["state"] == state) & (polls["special"] == special)]
         cfg = replace(base_avg, state=state)
         challenger, margins = main_challenger(race_polls, cfg)
+        if he.enabled:
+            margins = poll_margins(race_polls, replace(cfg, exclude_partisan=False), challenger=challenger)
+            if len(margins):
+                sponsor = margins["partisan"].fillna("")
+                shift = [effects.get(_group(p, s), effects.get(f"*|{s}", 0.0) if s else 0.0)
+                         for p, s in zip(margins["pollster"], sponsor)]
+                margins = margins.assign(margin=margins["margin"] - np.array(shift),
+                                         sample_size=np.where(sponsor != "", margins["sample_size"].fillna(
+                                             cfg.reference_sample_size) * he.partisan_weight**2, margins["sample_size"]))
         start = pd.Timestamp(as_of) - pd.Timedelta(days=trend_days)
         avg = time_weighted_average(margins, cfg, start=start, end=as_of) if len(margins) else margins
         current = avg[avg["date"] == pd.Timestamp(as_of)] if len(avg) else avg
