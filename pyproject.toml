@@ -6,7 +6,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
 authors = [
-    { name = "Jonathan Berman", email = "jonathan.max.berman@gmail.com" }
+    { name = "Jonathan Berman" }
 ]
 requires-python = ">=3.12"
 dependencies = [
