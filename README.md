@@ -92,6 +92,7 @@ Census-based adjustments). Results from the run on 2026-11-03:
 |---|---|---|
 | Undecided voters break to the leader | 0.2568 -> 0.2563 | 11 of 13, direction right every fold |
 | Fundamentals blend | 0.2568 -> 0.2560 | 8 of 13 |
+| Fundamentals blend, weighted by lead time | 0.2568 -> 0.2549 | 8 of 13 |
 | House effects anchored to past results | 0.2572 -> 0.2638 | 5 of 13 (fails; its 2018-2024 pass didn't hold) |
 
 ### Indicators
@@ -128,6 +129,7 @@ switching is instant and only passes grow the number of combinations.
 | house effects, nonpartisan polls only (`partisan_weight: 0`) | Post hoc split of the above | Passed: 0.1928 -> 0.1912, better in 3 of 4 |
 | house effects pooled across race types, with 538 history priors (`pooled`, `history`) | More data per pollster sharpens the leans and helps | Failed both ways: nonpartisan only 0.1928 -> 0.1934 (2 of 4); partisan included 0.1928 -> 0.2001 (0 of 4). Helps 2022, hurts 2020 and 2024, when Republican-leaning pollsters were closest |
 | house effects anchored to past results (`anchor: results`), post hoc | Leans measured against actual results, not peers, so pollsters that were right aren't pulled toward a miss | Passed: nonpartisan 0.1928 -> 0.1871 (3 of 4, margin error better in all 4); partisan included 0.1914 (2 of 4, weak). Adds nothing on top of `senate_fundamentals` (0.1463 vs 0.1451) |
+| `senate_fundamentals_by_lead` | Rescale the polls' side of the blend by how accurate polls were at each lead time | Passed: 0.1927 -> 0.1412 (fixed blend 0.1451), better in 4 of 4; eve 1998-2022 +0.0019 vs +0.0009 for the fixed blend, and positive whichever way the polls missed. Polls were 68-85% as noisy as assumed at every lead |
 | `news_inflation` | Declared when built | Not testable: coverage archive began 2026-11-03 |
 
 The House backtest needs MIT's House results, which Dataverse serves only

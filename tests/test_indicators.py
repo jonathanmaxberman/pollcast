@@ -172,3 +172,17 @@ def test_education_shift_recovers_a_planted_bias():
     assert beta == pytest.approx(-2.0, abs=0.3) and ind.effect({"beta": beta}) < 0
     shifted = ind.apply(races.head(1), {"beta": -2.0}, 0)
     assert shifted["mean"].iloc[0] == pytest.approx(races["mean"].iloc[0] - 2.0 * zs["S0"])
+
+
+def test_lead_aware_blend_trusts_polls_more_where_they_were_more_accurate():
+    from pollcast.indicators.fundamentals import SenateFundamentals
+
+    ind = SenateFundamentals({"lead_aware": True})
+    ind.features = lambda rows: pd.DataFrame({"lean": 0.0, "env": 0.0, "inc": 0.0}, index=rows.index)
+    params = {"coef": [10.0, 1.0, 1.0, 1.0], "sigma_f": 4.0, "poll_var_scale": {0: 0.25, 90: 1.0}}
+    inputs = pd.DataFrame({"basis": ["polls"], "mean": [0.0], "sd": [4.0]})
+    eve = ind.apply(inputs, params, lead_days=0)["mean"].iloc[0]
+    early = ind.apply(inputs, params, lead_days=90)["mean"].iloc[0]
+    assert early == pytest.approx(5.0)  # equal weights 90 days out
+    assert eve == pytest.approx(10 * 4 / (4 + 16))  # poll variance 4 vs 16: polls dominate at eve
+    assert "lead time" in ind.label()

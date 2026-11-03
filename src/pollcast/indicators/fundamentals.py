@@ -22,6 +22,14 @@ its last Senate result.
 
 Declared before testing: b_lean > 0, and blending improves held-out log loss.
 
+With `lead_aware: true`, the polls' side of the blend is rescaled by lead
+time: for each lead in the training cycles, the polls' actual misses (net of
+each cycle's shared miss) are compared with the uncertainty the simulation
+assumed, and that ratio scales each race's poll variance at that lead. Polls
+then get more weight where they have been more accurate than assumed (close
+to election day) and less where they missed more (months out). Declared:
+this beats the fixed blend.
+
 Known gaps: candidate lists come from certified results in the backtest (in
 late-primary states that is a little early 90 days out) and from poll
 candidate names live; appointed incumbents in specials count as open seats.
@@ -136,10 +144,22 @@ class SenateFundamentals(Indicator):
         coef = np.linalg.solve(A.T @ A + ridge, A.T @ y.to_numpy())
         resid = pd.Series(y.to_numpy() - A @ coef, index=y.index)
         within = resid - resid.groupby(cycles).transform("mean")
-        return {"coef": [float(c) for c in coef], "sigma_f": float(np.sqrt((within**2).mean()))}
+        params = {"coef": [float(c) for c in coef], "sigma_f": float(np.sqrt((within**2).mean()))}
+        if self.settings.get("lead_aware"):
+            scale = {}
+            polled = races[races["basis"] == "polls"]
+            for lead, g in polled.groupby("lead_days"):
+                miss = g["margin"] - g["mean"]
+                miss = miss - miss.groupby(g["cycle"]).transform("mean")
+                scale[int(lead)] = float((miss**2).mean() / (g["sd"] ** 2).mean())
+            params["poll_var_scale"] = scale
+        return params
 
     def effect(self, params: dict) -> float:
         return params["coef"][1]
+
+    def label(self) -> str:
+        return self.description + (" (weighted by lead time)" if self.settings.get("lead_aware") else "")
 
     def estimate(self, rows: pd.DataFrame, params: dict) -> pd.Series:
         X = self.features(rows)
@@ -153,6 +173,10 @@ class SenateFundamentals(Indicator):
         ok = f.notna()
         polled = ok & (out["basis"] == "polls")
         sp2 = out.loc[polled, "sd"] ** 2
+        scale = params.get("poll_var_scale")
+        if scale:
+            nearest = min((int(k) for k in scale), key=lambda k: abs(k - lead_days))
+            sp2 = sp2 * scale[str(nearest)] if str(nearest) in scale else sp2 * scale[nearest]
         out.loc[polled, "mean"] = (out.loc[polled, "mean"] / sp2 + f[polled] / sf2) / (1 / sp2 + 1 / sf2)
         out.loc[polled, "sd"] = np.sqrt(1 / (1 / sp2 + 1 / sf2))
         unpolled = ok & (out["basis"] != "polls")

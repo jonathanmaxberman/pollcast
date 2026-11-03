@@ -157,7 +157,7 @@ def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
     out.mkdir(parents=True)
     meta = {"run_id": run_id, "race": "history_eve", "config": config.name, "config_hash": config_hash(config)}
     tested = {}
-    for name in ("undecided_stretch", "senate_fundamentals"):
+    for name in ("undecided_stretch", "senate_fundamentals", "senate_fundamentals_by_lead"):
         settings = (config.indicators or {}).get(name) or {}
         ind = INDICATORS[settings.get("module", name)](settings)
         ind.prepare(config)

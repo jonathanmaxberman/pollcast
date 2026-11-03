@@ -163,6 +163,13 @@ indicators:
     enabled: false
     prior_sd: 1.0        # skeptical on purpose: tighter than the ~2-point slopes already seen
     post_hoc: "proposed after run 20261103T194249Z showed all four cycles' education slopes negative"
+  # Declared before testing: rescaling the polls' side of the blend by how
+  # accurate polls were at each lead time beats the fixed blend.
+  senate_fundamentals_by_lead:
+    module: senate_fundamentals
+    enabled: false
+    ridge: 1.0
+    lead_aware: true
   # Not testable until there is coverage history (archive began 2026-11-03).
   news_inflation:
     module: news_coverage
