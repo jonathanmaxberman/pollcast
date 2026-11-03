@@ -69,3 +69,14 @@ def test_historical_bias_is_against_results_and_covers_sponsors():
     b = historical_bias(hist, 2018, prior_polls=0.0)
     assert b["X"] == pytest.approx(6.0) and b["Y"] == pytest.approx(4.0)  # the shared miss is kept
     assert b["*|REP"] == pytest.approx(-2.0) and "*|DEM" not in b
+
+
+def test_election_day_is_tuesday_after_first_monday():
+    from datetime import date
+
+    from pollcast.history import election_day
+
+    assert election_day(2018) == date(2018, 11, 6)
+    assert election_day(2020) == date(2020, 11, 3)
+    assert election_day(2026) == date(2026, 11, 3)
+    assert election_day(2022) == date(2022, 11, 8)

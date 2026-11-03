@@ -69,6 +69,31 @@ Each run writes `data/backtests/<run>/` (races, scores, calibration, the
 config hash) and adds a line to `data/backtests/log.csv`, so every attempt,
 including failures, stays on record.
 
+### Election-eve history, 1998-2022
+
+```bash
+uv run pollcast fetch fivethirtyeight_ratings
+uv run pollcast backtest --history
+```
+
+538's pollster-ratings file has every poll it rated from the final 21 days
+of Senate, governor, presidential and House races since 1998, with results.
+That supports election-eve replays of about 1,600 Democrat-vs-Republican
+races over 13 even-year cycles (no 30-90 day leads, no unpolled races, no
+Census-based adjustments). Results from the run on 2026-11-03:
+
+| | Senate | Governor | President (states) | House |
+|---|---|---|---|---|
+| Races | 375 | 279 | 294 | 657 |
+| Log loss, config error sizes | 0.156 | 0.253 | 0.159 | 0.361 |
+| Log loss, error sizes fit on other cycles | 0.150 | 0.253 | 0.150 | 0.361 |
+
+| Adjustment (each cycle fit on the other 12) | Log loss | Cycles better |
+|---|---|---|
+| Undecided voters break to the leader | 0.2568 -> 0.2563 | 11 of 13, direction right every fold |
+| Fundamentals blend | 0.2568 -> 0.2560 | 8 of 13 |
+| House effects anchored to past results | 0.2572 -> 0.2638 | 5 of 13 (fails; its 2018-2024 pass didn't hold) |
+
 ### Indicators
 
 Indicators are plug-ins under `src/pollcast/indicators/` that adjust the

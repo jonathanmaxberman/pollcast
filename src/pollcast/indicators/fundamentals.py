@@ -113,10 +113,16 @@ class SenateFundamentals(Indicator):
 
     def features(self, rows: pd.DataFrame) -> pd.DataFrame:
         special = rows["special"] if "special" in rows else pd.Series(False, index=rows.index)
+        # Rows may carry their own national mood (the 1998-2022 history replay does).
+        env = rows["env"] if "env" in rows else pd.Series(
+            [self._env(int(c), a) for c, a in zip(rows["cycle"], rows["as_of"])], index=rows.index)
+        senate = rows["race_type"].eq("senate") if "race_type" in rows else pd.Series(True, index=rows.index)
         return pd.DataFrame({
             "lean": [self._lean(int(c), s) for c, s in zip(rows["cycle"], rows["state"])],
-            "env": [self._env(int(c), a) for c, a in zip(rows["cycle"], rows["as_of"])],
-            "inc": [self._incumbency(int(c), s, bool(sp)) for c, s, sp in zip(rows["cycle"], rows["state"], special)],
+            "env": env.astype(float),
+            # Incumbency comes from MIT's Senate results, so only Senate races get it.
+            "inc": [self._incumbency(int(c), s, bool(sp)) if is_sen else 0.0
+                    for c, s, sp, is_sen in zip(rows["cycle"], rows["state"], special, senate)],
         }, index=rows.index)
 
     # ---- model

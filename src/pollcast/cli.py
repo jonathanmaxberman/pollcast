@@ -49,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     p_bt.add_argument("--leads", type=int, nargs="+", default=[0, 7, 30, 60, 90],
                       help="days before election day to forecast from")
     p_bt.add_argument("--n-sims", type=int, default=5000)
+    p_bt.add_argument("--history", action="store_true",
+                      help="election-eve backtest over 1998-2022 from 538's pollster-ratings history")
 
     args = parser.parse_args(argv)
     config = load_config(args.config)
@@ -120,6 +122,23 @@ def main(argv: list[str] | None = None) -> int:
                   f"({house['national']['source']}); P(D control) {house['control']['p_dem_control']:.1%}")
         print(f"-> {out}")
         return 0
+    if args.command == "backtest" and args.history:
+        from pollcast.history import run_history_backtest
+
+        r = run_history_backtest(config, args.n_sims)
+        print("== election eve, 1998-2022, by race type")
+        print(r["by_type"].to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+        print("fitted error sizes (all cycles):", {k: round(v, 2) for k, v in r["fitted"]["all_cycles"].items()})
+        for name, ind in r["indicators"].items():
+            print(f"{name}: {ind['log_loss_base']:.4f} -> {ind['log_loss_indicator']:.4f} "
+                  f"({ind['improvement']:+.4f}); better in {ind['cycles_improved']}/{ind['cycles']}; "
+                  f"direction as declared in every fold: {ind['direction_as_declared']}")
+        h = r["house_effects"]
+        print(f"house effects vs results: {h['log_loss_base']:.4f} -> {h['log_loss_indicator']:.4f}; "
+              f"better in {h['cycles_improved']}/{h['cycles']}")
+        print(f"-> {r['dir']}")
+        return 0
+
     if args.command == "backtest":
         from pollcast.backtest import run_senate_backtest
 
