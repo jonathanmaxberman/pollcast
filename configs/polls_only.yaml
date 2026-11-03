@@ -144,7 +144,7 @@ indicators:
   # incumbency, national generic ballot) with the polls improves held-out
   # log loss, most where polls are thin; b_lean > 0. Off until it passes and you turn it on.
   senate_fundamentals:
-    enabled: true   # passed; turned on by the user for the 2026-11-03 public prediction
+    enabled: false   # superseded by senate_fundamentals_by_lead (better in both backtests)
     ridge: 1.0
   # Declared before testing: a late rise in the challenger's search share
   # (Google Trends, last 14 days vs the 14 before) means they beat their polls.
@@ -155,19 +155,19 @@ indicators:
   # together (sd_edu > 0), judged on the seat-count score since it changes
   # correlation, not each race's odds.
   education_correlation:
-    enabled: false
+    enabled: true    # default: best held-out combination, 2026-11-03
   # Post-hoc try: proposed after education_correlation's fit showed every
   # cycle's slope negative. Declared: beta < 0 (challengers run behind their
   # polls in high non-college-white states). Off unless it passes and you enable it.
   education_shift:
-    enabled: false
+    enabled: true    # default: best held-out combination, 2026-11-03
     prior_sd: 1.0        # skeptical on purpose: tighter than the ~2-point slopes already seen
     post_hoc: "proposed after run 20261103T194249Z showed all four cycles' education slopes negative"
   # Declared before testing: rescaling the polls' side of the blend by how
   # accurate polls were at each lead time beats the fixed blend.
   senate_fundamentals_by_lead:
     module: senate_fundamentals
-    enabled: false
+    enabled: true    # default: best held-out combination, 2026-11-03
     ridge: 1.0
     lead_aware: true
   # Not testable until there is coverage history (archive began 2026-11-03).
