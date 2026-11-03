@@ -647,11 +647,17 @@ const statusText = {
   failed: "Failed its backtest",
   untested: "Not yet backtested",
 };
+// Both backtests: Senate 2018-2024 at five lead times, and election eve
+// 1998-2022 across Senate, governor, presidential and House races.
 function optionScore(o) {
   if (o.improvement == null) return "";
-  const metric = o.metric === "seat_log_score" ? "seat-count score" : "log loss";
-  return `Held-out ${metric} ${o.improvement >= 0 ? "improved" : "worsened"} by ${Math.abs(o.improvement).toFixed(4)}, better in ${o.cycles_improved} cycles` +
-    (o.direction_as_declared ? "" : "; direction not as declared in every fold");
+  const part = (label, imp, cycles, metric) =>
+    `${label}: ${metric === "seat_log_score" ? "seat-count score" : "log loss"} ${imp >= 0 ? "better" : "worse"} by ${Math.abs(imp).toFixed(4)}, ${cycles} cycles better`;
+  const h = o.history;
+  return part("2018-2024", o.improvement, o.cycles_improved, o.metric) +
+    (h ? `; 1998-2022: ${h.improvement >= 0 ? "better" : "worse"} by ${Math.abs(h.improvement).toFixed(4)}, ${h.cycles_improved} cycles better`
+       : "; 1998-2022: not testable on that data") +
+    (o.direction_as_declared ? "" : "; direction not as declared in every 2018-2024 fold");
 }
 
 // A variant's name is whatever its label adds to the group's, e.g. "(last 30 days only)".
