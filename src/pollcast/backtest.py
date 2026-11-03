@@ -390,6 +390,7 @@ def save_indicator_params(config: Config, meta: dict, tested: dict) -> None:
     saved = json.loads(path.read_text()) if path.exists() else {}
     for name, r in tested.items():
         saved[name] = {
+            **saved.get(name, {}),  # keep the 1998-2022 verdict, if any
             "accepted": r["accepted"], "run_id": meta["run_id"], "race": meta["race"], "metric": r["metric"],
             "improvement": r["improvement"], "cycles_improved": f"{r['cycles_improved']}/{r['cycles']}",
             "direction_as_declared": r["direction_as_declared"], "params": r["params_all_cycles"],

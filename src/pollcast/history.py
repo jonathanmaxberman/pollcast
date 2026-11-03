@@ -157,15 +157,30 @@ def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
     out.mkdir(parents=True)
     meta = {"run_id": run_id, "race": "history_eve", "config": config.name, "config_hash": config_hash(config)}
     tested = {}
-    for name in ("undecided_stretch", "senate_fundamentals", "senate_fundamentals_by_lead"):
-        settings = (config.indicators or {}).get(name) or {}
+    import json as _json
+
+    params_path = config.data_dir / "backtests" / "indicator_params.json"
+    saved = _json.loads(params_path.read_text()) if params_path.exists() else {}
+    for name, settings in (config.indicators or {}).items():
+        settings = settings or {}
+        module = settings.get("module", name)
+        # Only modules whose data reach back before 2018 at election eve.
+        if module not in ("undecided_stretch", "senate_fundamentals", "education_shift",
+                          "education_correlation", "education_swing"):
+            continue
         ind = INDICATORS[settings.get("module", name)](settings)
         ind.prepare(config)
         r = score_indicator(races, ind, config, name=name)
         r["table"].to_csv(out / f"indicator_{name}.csv", index=False)
         append_indicator_log(config, meta, r)
         tested[name] = r
-    effects = results_anchored_effects(config, sorted(races["cycle"].unique()))
+        # The broader test can veto: an adjustment counts as passed only if it
+        # passes here too (see simulate.adjustment_groups).
+        saved.setdefault(name, {})["history"] = {
+            "accepted": r["accepted"], "improvement": r["improvement"], "run_id": run_id,
+            "cycles_improved": f"{r['cycles_improved']}/{r['cycles']}", "metric": r["metric"]}
+    params_path.write_text(_json.dumps(saved, indent=2))
+    effects = results_anchored_effects(config, sorted(races["cycle"].unique()))  # house effects, below
     he = eve_races(config, house_effects=effects).merge(races[["cycle", "race"]], on=["cycle", "race"])
     base = races.merge(he[["cycle", "race"]], on=["cycle", "race"])
     pb, ph = resimulate(base, sizes, sim), resimulate(he, sizes, sim)

@@ -155,19 +155,25 @@ indicators:
   # together (sd_edu > 0), judged on the seat-count score since it changes
   # correlation, not each race's odds.
   education_correlation:
-    enabled: true    # default: best held-out combination, 2026-11-03
+    enabled: false   # passed 2018-2024 but failed 1998-2022
   # Post-hoc try: proposed after education_correlation's fit showed every
   # cycle's slope negative. Declared: beta < 0 (challengers run behind their
   # polls in high non-college-white states). Off unless it passes and you enable it.
   education_shift:
-    enabled: true    # default: best held-out combination, 2026-11-03
+    enabled: false   # passed 2018-2024 but failed 1998-2022 (0.2568 -> 0.2587)
     prior_sd: 1.0        # skeptical on purpose: tighter than the ~2-point slopes already seen
     post_hoc: "proposed after run 20261103T194249Z showed all four cycles' education slopes negative"
+  # Declared before testing: the education correction scales with each
+  # cycle's polled education swing (b < 0: a bigger polled Democratic swing in
+  # high non-college-white states means a bigger overstatement).
+  education_swing:
+    enabled: false
+    prior_sd_b: 0.5
   # Declared before testing: rescaling the polls' side of the blend by how
   # accurate polls were at each lead time beats the fixed blend.
   senate_fundamentals_by_lead:
     module: senate_fundamentals
-    enabled: true    # default: best held-out combination, 2026-11-03
+    enabled: true    # default: best held-out combination (both backtests)
     ridge: 1.0
     lead_aware: true
   # Not testable until there is coverage history (archive began 2026-11-03).

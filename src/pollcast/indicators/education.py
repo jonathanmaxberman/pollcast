@@ -128,3 +128,95 @@ class EducationShift(EducationCorrelation):
         hit = (out["basis"] == "polls") & z.notna()
         out.loc[hit, "mean"] = out.loc[hit, "mean"] + params["beta"] * z[hit]
         return out
+
+
+class EducationSwing(EducationShift):
+    """The education correction grows with how far polls show those states swinging.
+
+    Hypothesis: when polls show states with many non-college white adults
+    moving toward Democrats relative to their last presidential result, part
+    of that polled swing is nonresponse among those voters, so the polls
+    overstate it. Each cycle's *polled education swing* S is the slope, across
+    that cycle's races, of (polling average - state's last presidential margin)
+    on the state's standardized non-college white share z. The correction::
+
+        adjusted margin = polling average + (a + b x S) x z
+
+    a and b are fit across training cycles: each cycle's election-eve miss
+    slope on z is regressed on that cycle's S, with b shrunk toward zero
+    (prior sd `prior_sd_b`). Declared before testing: b < 0.
+
+    S uses only polls available at the forecast date. With one (S, slope)
+    pair per cycle, it needs many cycles; the 1998-2022 history gives 13,
+    using 2021 education shares for every year (states' ranking on this
+    share barely moves, but it is a small lookahead).
+    """
+
+    name = "education_swing"
+    description = "The education correction grows with how far polls show non-college-white states swinging"
+    expected = "b < 0: a bigger polled Democratic swing in those states means a bigger overstatement"
+    expected_sign = -1
+    metric = "race_log_loss"
+
+    def prepare(self, config) -> None:
+        super().prepare(config)
+        from pollcast.sources.mit import president_margins
+
+        snap = latest_snapshot(config.data_dir, "mit_results")
+        pres = president_margins(snap.path / "president.csv")
+        self.pres = pres.set_index(["year", "state"])["margin"].to_dict()
+        self.pres_years = sorted(pres["year"].unique())
+
+    def _prev_pres(self, cycle: int, state: str) -> float:
+        years = [y for y in self.pres_years if y < cycle]
+        return self.pres.get((years[-1], state), np.nan) if years else np.nan
+
+    def _swing_slope(self, rows: pd.DataFrame) -> float:
+        """Polled education swing for one cycle and lead: slope of (poll - last pres) on z."""
+        z = self.z(rows)
+        swing = rows["mean"] - [self._prev_pres(int(c), s) for c, s in zip(rows["cycle"], rows["state"])]
+        ok = z.notna() & swing.notna() & (rows["basis"] == "polls")
+        if ok.sum() < 8:
+            return np.nan
+        x = z[ok] - z[ok].mean()
+        return float((x * (swing[ok] - swing[ok].mean())).sum() / (x**2).sum())
+
+    def _miss_slope(self, rows: pd.DataFrame) -> float:
+        z = self.z(rows)
+        miss = rows["margin"] - rows["mean"]
+        ok = z.notna() & (rows["basis"] == "polls")
+        if ok.sum() < 8:
+            return np.nan
+        x = z[ok] - z[ok].mean()
+        return float((x * (miss[ok] - miss[ok].mean())).sum() / (x**2).sum())
+
+    def fit(self, races: pd.DataFrame) -> dict:
+        from pollcast.indicators._shrink import shrunk_slope
+
+        pts = []
+        for (cycle, lead), g in races.groupby(["cycle", "lead_days"]):
+            s, m = self._swing_slope(g), self._miss_slope(g)
+            if not (np.isnan(s) or np.isnan(m)):
+                pts.append((lead, s, m))
+        if len(pts) < 3:
+            return {"a": 0.0, "b": 0.0, "s_mean": 0.0}
+        p = pd.DataFrame(pts, columns=["lead", "s", "m"])
+        s_mean = float(p["s"].mean())
+        x, y = p["s"] - s_mean, p["m"] - p["m"].mean()
+        b = shrunk_slope(x, y, float(self.settings.get("prior_sd_b", 0.5)),
+                         noise_sd=float(self.settings.get("noise_sd", 1.5)))
+        return {"a": float(p["m"].mean()), "b": b, "s_mean": s_mean}
+
+    def effect(self, params: dict) -> float:
+        return params["b"]
+
+    def apply(self, inputs: pd.DataFrame, params: dict, lead_days: int) -> pd.DataFrame:
+        out = inputs.copy()
+        s = self._swing_slope(out)
+        if np.isnan(s):
+            return out
+        beta = params["a"] + params["b"] * (s - params["s_mean"])
+        z = self.z(out)
+        hit = (out["basis"] == "polls") & z.notna()
+        out.loc[hit, "mean"] = out.loc[hit, "mean"] + beta * z[hit]
+        return out

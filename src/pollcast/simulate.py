@@ -365,13 +365,16 @@ def adjustment_groups(config: Config, sim: SimulateConfig, as_of: date) -> tuple
                   "available": t is not None, "_indicator": ind, "_params": (t or {}).get("params")}
         if not ind.testable():
             option |= {"status": "untested", "available": False, "reason": ind.untestable_reason()}
-        elif t is None:
+        elif t is None or "accepted" not in t:  # no 2018-2024 verdict yet
             option["status"] = "untested"
         else:
+            hist = t.get("history")
             option |= {"improvement": t["improvement"], "cycles_improved": t["cycles_improved"],
                        "metric": t.get("metric", "race_log_loss"),
                        "direction_as_declared": t["direction_as_declared"], "run_id": t["run_id"],
-                       "status": "passed" if t["accepted"] else "failed"}
+                       "history": hist,
+                       # Passing needs the 2018-2024 test and, where it ran, the 1998-2022 one.
+                       "status": "passed" if t["accepted"] and (hist is None or hist["accepted"]) else "failed"}
         group["options"].append(option)
     left_out = []
     for group in groups.values():
