@@ -99,6 +99,9 @@ Census-based adjustments). Results from the run on 2026-11-03:
 | Education shift (high non-college-white states) | 0.2568 -> 0.2587 | 7 of 13 (fails; margin miss still better, 4.97 -> 4.91) |
 | Education correlation (seat-count score) | 3.504 -> 3.537 | 2 of 13 (fails) |
 | Education correction scaled by the polled education swing | 0.2568 -> 0.2591 | 7 of 13 (fails; fitted scaling is about zero) |
+| Election-day rain (relative to the cycle's average) | 0.2568 -> 0.2570 | 7 of 13 (fails; helped Republicans in 8 cycles but flipped in 2004-08 and every cycle since 2018) |
+| Consumer sentiment against the president's party | 0.2568 -> 0.2602 | 4 of 13 (fails) |
+| Gas prices against the president's party | 0.2568 -> 0.2577 | 4 of 13 (fails) |
 | **Live default: undecided + lead-aware blend** | **0.2568 -> 0.2545** | **10 of 13** |
 
 An adjustment counts as passed only if it passes both the 2018-2024 replays

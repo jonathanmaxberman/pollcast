@@ -3,7 +3,13 @@
 Gomez, Hansford and Krause (2007) found that rain lowers turnout in US
 presidential elections and modestly helps Republicans. The adjustment::
 
-    adjusted margin = polling average + beta x election-day rain (inches, state mean)
+    adjusted margin = polling average + beta x (state's rain - the cycle's average rain)
+
+Measured against the cycle's average across races, so a wetter-than-usual
+state shifts toward the Republican and a drier one toward the Democrat; the
+part every state shares is left to the simulation's national error. (Until
+2026-11-03 the adjustment was applied to raw rain, so only wet states moved;
+fixed to match how beta is fit.)
 
 Declared before testing: beta < 0 (rain moves the margin toward the
 Republican; margins are challenger minus Republican).
@@ -23,7 +29,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from pollcast.calendar import ELECTION_DAYS
+from pollcast.calendar import election_day
 from pollcast.indicators._shrink import shrunk_slope
 from pollcast.indicators.base import Indicator
 from pollcast.sources.noaa import weather_table
@@ -48,7 +54,7 @@ class ElectionDayRain(Indicator):
         return self.description
 
     def feature(self, rows: pd.DataFrame) -> pd.Series:
-        return pd.Series([self.rain.get((str(ELECTION_DAYS.get(int(c))), s)) for c, s in
+        return pd.Series([self.rain.get((str(election_day(int(c))), s)) for c, s in
                           zip(rows["cycle"], rows["state"])], index=rows.index, dtype=float)
 
     def _in_window(self, rows: pd.DataFrame) -> pd.Series:
@@ -71,5 +77,7 @@ class ElectionDayRain(Indicator):
             return out
         rain = self.feature(out)
         hit = (out["basis"] == "polls") & rain.notna()
-        out.loc[hit, "mean"] = out.loc[hit, "mean"] + params["beta"] * rain[hit]
+        # Relative to this cycle's races, the same centering the fit uses.
+        centered = rain[hit] - rain[hit].mean() if hit.any() else rain[hit]
+        out.loc[hit, "mean"] = out.loc[hit, "mean"] + params["beta"] * centered
         return out

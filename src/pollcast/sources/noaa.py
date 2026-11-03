@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 
-from pollcast.calendar import ELECTION_DAYS
+from pollcast.calendar import ELECTION_DAYS, HISTORY_DAYS
 from pollcast.sources._538_format import STATE_NAMES
 from pollcast.sources.base import Source
 from pollcast.storage import Snapshot, SnapshotWriter
@@ -54,7 +54,8 @@ class NOAAWeather(Source):
         writer.write("stations.csv", stations.to_csv(index=False).encode(), url=STATIONS_URL)
         today = writer.now.date()
         ids = stations["station"].tolist()
-        for cycle, day in sorted(ELECTION_DAYS.items()):
+        days = dict(ELECTION_DAYS) | (HISTORY_DAYS if self.settings.get("history", True) else {})
+        for cycle, day in sorted(days.items()):
             if day >= today:
                 continue
             for i in range(0, len(ids), 100):

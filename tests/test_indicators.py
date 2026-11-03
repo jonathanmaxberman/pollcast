@@ -99,6 +99,9 @@ def test_rain_module_recovers_a_planted_effect_and_skips_far_leads():
     assert beta == pytest.approx(-2.0, abs=0.3)
     far = races.assign(lead_days=30)
     assert ind.apply(far, {"beta": beta}, lead_days=30)["mean"].equals(far["mean"])
+    near = races.head(40).assign(lead_days=0)
+    shifted = ind.apply(near, {"beta": -2.0}, lead_days=0)["mean"] - near["mean"]
+    assert shifted.mean() == pytest.approx(0.0, abs=1e-9)  # dry states move opposite to wet ones
 
 
 def test_economy_module_flips_sign_with_the_presidents_party():

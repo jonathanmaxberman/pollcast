@@ -32,11 +32,7 @@ from pollcast.storage import latest_snapshot
 TYPES = {"Sen": "senate", "Gov": "governor", "Pres": "president", "House": "house"}
 
 
-def election_day(year: int) -> date:
-    """The Tuesday after the first Monday in November."""
-    first = date(year, 11, 1)
-    monday = first + timedelta(days=(7 - first.weekday()) % 7)
-    return monday + timedelta(days=1)
+from pollcast.calendar import election_day  # noqa: E402  (re-exported for callers)
 
 
 def load_history(config: Config) -> pd.DataFrame:
@@ -166,7 +162,8 @@ def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
         module = settings.get("module", name)
         # Only modules whose data reach back before 2018 at election eve.
         if module not in ("undecided_stretch", "senate_fundamentals", "education_shift",
-                          "education_correlation", "education_swing"):
+                          "education_correlation", "education_swing", "election_day_rain",
+                          "economy_vs_president"):
             continue
         ind = INDICATORS[settings.get("module", name)](settings)
         ind.prepare(config)

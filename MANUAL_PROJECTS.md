@@ -68,6 +68,10 @@ of payoff for the effort.
   white shift by state and cycle can be measured and compared with how
   polls showed it.
 
+- **NOAA daily climate normals** (1991-2020): rain relative to what's normal
+  for each state on that date, the measure Gomez, Hansford and Krause used,
+  rather than raw inches. A rainy day in Seattle isn't one in Phoenix.
+
 ## Optional purchases
 
 - [ ] **FiftyPlusOne subscription** ($8/month or $80/year). Generic-ballot
