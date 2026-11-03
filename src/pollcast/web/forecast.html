@@ -79,13 +79,13 @@ section { display: grid; gap: 14px; min-width: 0; }
 
 /* Map */
 .map-wrap { position: relative; }
-#map { width: 100%; height: auto; display: block; }
-#map .state { stroke: var(--none-edge); stroke-width: 1; stroke-linejoin: round; }
-#map .state.race { cursor: pointer; }
-#map .state.race:hover, #map .state.race.active { stroke: var(--focus); stroke-width: 2; }
-#map .state.race:focus { outline: none; stroke: var(--focus); stroke-width: 2.5; }
-#map .hatch { pointer-events: none; }
-#map .tag { font-family: var(--font-data); font-size: 11px; font-weight: 500; fill: var(--fg); pointer-events: none; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+#map, #g-map { width: 100%; height: auto; display: block; }
+#map .state, #g-map .state { stroke: var(--none-edge); stroke-width: 1; stroke-linejoin: round; }
+#map .state.race, #g-map .state.race { cursor: pointer; }
+#map .state.race:hover, #map .state.race.active, #g-map .state.race:hover, #g-map .state.race.active { stroke: var(--focus); stroke-width: 2; }
+#map .state.race:focus, #g-map .state.race:focus { outline: none; stroke: var(--focus); stroke-width: 2.5; }
+#map .hatch, #g-map .hatch { pointer-events: none; }
+#map .tag, #g-map .tag { font-family: var(--font-data); font-size: 11px; font-weight: 500; fill: var(--fg); pointer-events: none; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
 .legend .ramp { display: flex; gap: 2px; align-items: center; }
@@ -193,6 +193,7 @@ table.races { width: 100%; border-collapse: collapse; font-size: 14px; min-width
   <nav class="tabs" role="tablist" aria-label="Chamber" id="tabs">
     <button type="button" role="tab" id="tab-senate" aria-controls="view-senate" aria-selected="true">Senate</button>
     <button type="button" role="tab" id="tab-house" aria-controls="view-house" aria-selected="false">House</button>
+    <button type="button" role="tab" id="tab-governor" aria-controls="view-governor" aria-selected="false">Governor</button>
   </nav>
 
   <div class="view" id="view-senate" role="tabpanel" aria-labelledby="tab-senate">
@@ -296,6 +297,51 @@ table.races { width: 100%; border-collapse: collapse; font-size: 14px; min-width
     <div id="h-method"></div>
   </section>
   </div>
+
+  <div class="view" id="view-governor" role="tabpanel" aria-labelledby="tab-governor" hidden>
+  <header>
+    <div class="eyebrow" id="g-eyebrow">Governors · 2026</div>
+    <h1 id="g-headline">Governor forecast</h1>
+    <p class="lede" id="g-lede"></p>
+  </header>
+
+  <div class="odds" id="g-odds"></div>
+
+  <section aria-labelledby="g-hist-title">
+    <div class="section-head">
+      <h2 id="g-hist-title">Governor races won by Democrats</h2>
+      <p class="hint" id="g-hist-hint"></p>
+    </div>
+    <div class="hist-wrap"><svg id="g-hist" role="img" aria-labelledby="g-hist-title"></svg></div>
+  </section>
+
+  <section aria-labelledby="g-map-title">
+    <div class="section-head">
+      <h2 id="g-map-title">Chance of winning each race</h2>
+      <p class="hint">Hover or tap a state. Click to pin its card.</p>
+    </div>
+    <div class="legend" id="g-legend"></div>
+    <div class="map-wrap"><svg id="g-map" viewBox="0 0 975 610" role="img" aria-labelledby="g-map-title"></svg></div>
+  </section>
+
+  <section aria-labelledby="g-table-title">
+    <div class="section-head">
+      <h2 id="g-table-title">Every race</h2>
+      <p class="hint">Closest first. Margins are challenger minus Republican.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="races">
+        <thead><tr><th>State</th><th>Challenger</th><th>Odds</th><th class="n">Chance</th><th class="n">Expected</th><th class="n">80% range</th><th class="n">Polls</th></tr></thead>
+        <tbody id="g-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="method" aria-labelledby="g-method-title">
+    <h2 id="g-method-title" style="color: var(--fg)">How this works</h2>
+    <div id="g-method"></div>
+  </section>
+  </div>
 </div>
 
 <div class="card" id="card" role="dialog" aria-live="polite" hidden></div>
@@ -306,6 +352,7 @@ table.races { width: 100%; border-collapse: collapse; font-size: 14px; min-width
 const FORECAST = /*__FORECAST__*/null;
 const TOPOLOGY = /*__TOPOLOGY__*/null;
 const HOUSE = /*__HOUSE__*/null;
+const GOV = /*__GOVERNOR__*/null;
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const pct = (p) => {
@@ -396,7 +443,7 @@ function drawSeatHistogram(svgId, hist, threshold, nSims, opt) {
     .attr("x", (d) => x(d.seats)).attr("width", x.bandwidth())
     .attr("y", (d) => y(d.p)).attr("height", (d) => Math.max(0, y(0) - y(d.p)))
     .attr("rx", Math.min(4, x.bandwidth() / 3))
-    .attr("fill", (d) => (d.seats >= threshold ? opt.above.color : opt.below.color));
+    .attr("fill", (d) => (threshold != null && d.seats >= threshold ? opt.above.color : opt.below.color));
 
   // Baseline over the bars' squared bottoms.
   svg.append("line").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(0)).attr("y2", y(0))
@@ -408,7 +455,7 @@ function drawSeatHistogram(svgId, hist, threshold, nSims, opt) {
   svg.append("g").attr("class", "axis").selectAll("text").data(ticks).join("text")
     .attr("x", (s) => x(s) + x.bandwidth() / 2).attr("y", H - 8).attr("text-anchor", "middle").text((s) => s);
 
-  if (threshold >= lo && threshold <= hi) {
+  if (threshold != null && threshold >= lo && threshold <= hi) {
     const tx = x(threshold) - (x.step() - x.bandwidth()) / 2;
     svg.append("line").attr("x1", tx).attr("x2", tx).attr("y1", m.t - 18).attr("y2", y(0))
       .attr("stroke", "var(--fg)").attr("stroke-dasharray", "3 3").attr("stroke-width", 1);
@@ -424,7 +471,7 @@ function drawSeatHistogram(svgId, hist, threshold, nSims, opt) {
     .attr("y", m.t).attr("height", y(0) - m.t).attr("fill", "transparent")
     .on("pointermove", (ev, d) => showCard(null,
       `<h3>${d.seats} ${opt.noun}</h3><p class="note" style="color:var(--fg)">${(d.p * 100).toFixed(1)}% of simulations. ` +
-      (d.seats >= threshold ? opt.above.outcome : opt.below.outcome) + `</p>`, null, ev.clientX, ev.clientY))
+      (threshold == null ? "" : d.seats >= threshold ? opt.above.outcome : opt.below.outcome) + `</p>`, null, ev.clientX, ev.clientY))
     .on("pointerleave", () => hideCard());
 }
 
@@ -472,14 +519,19 @@ function unpin() {
 }
 
 // ---------- Senate map ----------
-function renderMap() {
-  const svg = d3.select("#map");
+function renderStateMap(o) {
+  // o: {svg, legend, races (Map), prefix, hatch}
+  const races = o.races;
+  const hover = (el, name, cx, cy) => showCard(o.prefix + name, cardHTML(races.get(name)), el || o.elFor(name), cx, cy);
+  const unhover = () => hideCard();
+  const togglePin = (el, name, cx, cy) => togglePinCard(o.prefix + name, cardHTML(races.get(name)), el || o.elFor(name), cx, cy);
+  const svg = d3.select(o.svg);
   svg.selectAll("*").remove();
   const path = d3.geoPath();
   const features = topojson.feature(TOPOLOGY, TOPOLOGY.objects.states).features;
 
   const defs = svg.append("defs");
-  const pat = defs.append("pattern").attr("id", "ind-hatch").attr("patternUnits", "userSpaceOnUse")
+  const pat = defs.append("pattern").attr("id", o.hatch).attr("patternUnits", "userSpaceOnUse")
     .attr("width", 6).attr("height", 6).attr("patternTransform", "rotate(45)");
   pat.append("rect").attr("width", 2).attr("height", 6).attr("fill", "var(--ind-stripe)");
 
@@ -518,7 +570,7 @@ function renderMap() {
 
   // Hatch independents so they don't read as Democrats.
   g.selectAll("path.hatch").data(features.filter((f) => races.get(f.properties.name)?.challenger === "IND"))
-    .join("path").attr("class", "hatch").attr("d", path).attr("fill", "url(#ind-hatch)");
+    .join("path").attr("class", "hatch").attr("d", path).attr("fill", `url(#${o.hatch})`);
 
   // Small-state tags for the northeast, where shapes are too small to hover easily.
   const small = { "Rhode Island": [930, 205], "Delaware": [918, 262], "New Jersey": [928, 238], "Massachusetts": [944, 178], "New Hampshire": [946, 150] };
@@ -537,11 +589,15 @@ function renderMap() {
 
 
   const sw = (k) => `<span style="background:var(--${k})"></span>`;
-  document.getElementById("legend").innerHTML =
+  document.getElementById(o.legend).innerHTML =
     `<div class="ramp">${sw("r3")}${sw("r2")}${sw("r1")}${sw("tossup")}${sw("c1")}${sw("c2")}${sw("c3")}</div>` +
     `<span>Republican ← Solid · Likely · Lean · Toss-up · Lean · Likely · Solid → Challenger</span>` +
     `<span><span class="swatch" style="background:var(--c2);background-image:repeating-linear-gradient(45deg,var(--ind-stripe) 0 2px,transparent 2px 6px)"></span>Independent challenger</span>` +
     `<span><span class="swatch" style="background:var(--none)"></span>No race</span>`;
+}
+
+function renderMap() {
+  renderStateMap({ svg: "#map", legend: "legend", races, prefix: "s:", hatch: "ind-hatch", elFor: stateEl });
 }
 
 const abbr = { "Rhode Island": "RI", "Delaware": "DE", "New Jersey": "NJ", "Massachusetts": "MA", "New Hampshire": "NH" };
@@ -931,16 +987,75 @@ function renderHouseMethod() {
     <p>Polls: The New York Times poll database. District results on 2026 lines: The Downballot. Hex layout generated by pollcast from state shapes; district hexes within a state run north to south and don't match real district locations.</p>`;
 }
 
+// ================= Governor =================
+const govRaces = GOV ? new Map(GOV.states.map((s) => [s.state, s])) : new Map();
+const govEl = (name) => [...document.querySelectorAll("#g-map .state.race")].find((p) => p.__name === name);
+
+function renderGovernor() {
+  const n = GOV.states.length;
+  const demFav = GOV.states.filter((s) => s.challenger === "DEM" && s.p_challenger > 0.5).length;
+  const repFav = GOV.states.filter((s) => s.p_challenger < 0.5).length;
+  const tossups = GOV.states.filter((s) => s.p_challenger > 0.4 && s.p_challenger < 0.6).length;
+  const hist = GOV.control.challenger_wins_hist || {};
+  const entries = Object.entries(hist).map(([k, v]) => [+k, v]).sort((a, b) => a[0] - b[0]);
+  let acc = 0, median = 0;
+  for (const [k, v] of entries) { acc += v; if (acc >= 0.5) { median = k; break; } }
+  const asOf = new Date(GOV.as_of + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  document.getElementById("g-eyebrow").textContent = `Governors · ${GOV.cycle} · Forecast as of ${asOf}`;
+  document.getElementById("g-headline").textContent = `Democrats win ${median} of ${n} governor races in the median simulation`;
+  document.getElementById("g-lede").innerHTML =
+    `The Democrat (or an independent, where one is the main opponent) is favored in <strong>${n - repFav}</strong> races and the Republican in <strong>${repFav}</strong>; ` +
+    `<strong>${tossups}</strong> are within 40% to 60%. Same polls, model and adjustments as the Senate forecast.`;
+  document.getElementById("g-odds").innerHTML = [
+    { big: String(demFav), label: "Races with the Democrat favored", color: "var(--c3)" },
+    { big: String(repFav), label: "Races with the Republican favored", color: "var(--r3)" },
+    { big: String(tossups), label: "Toss-ups (40% to 60%)", color: "var(--tossup)" },
+  ].map((o) => `<div class="odd"><div class="big num">${o.big}</div><div class="label"><span class="swatch" style="background:${o.color}"></span>${o.label}</div></div>`).join("");
+  drawSeatHistogram("g-hist", hist, null, GOV.n_sims, {
+    noun: "races won by Democrats", hintId: "g-hist-hint",
+    above: { color: "var(--c2)", label: "", short: "", outcome: "" },
+    below: { color: "var(--c2)", label: "", short: "", outcome: "" },
+  });
+  renderStateMap({ svg: "#g-map", legend: "g-legend", races: govRaces, prefix: "g:", hatch: "g-ind-hatch", elFor: govEl });
+  const rows = [...GOV.states].sort((a, b) => Math.abs(a.p_challenger - 0.5) - Math.abs(b.p_challenger - 0.5));
+  const body = document.getElementById("g-rows");
+  body.innerHTML = rows.map((s) => {
+    const cColor = s.challenger === "IND" ? "var(--c2)" : "var(--c3)";
+    return `<tr data-state="${s.state}"><td><button class="state-btn" type="button">${s.state}</button></td>` +
+      `<td>${partyName[s.challenger]}</td>` +
+      `<td><div class="split" aria-hidden="true"><span style="width:${(s.p_challenger * 100).toFixed(1)}%;background:${cColor}"></span><span style="flex:1;background:var(--r3)"></span></div></td>` +
+      `<td class="n">${partyShort[s.challenger]} ${pct(s.p_challenger)}</td>` +
+      `<td class="n">${fmtMargin(s.mean, s.challenger)}</td>` +
+      `<td class="n">${fmtMargin(s.interval80[0], s.challenger)} to ${fmtMargin(s.interval80[1], s.challenger)}</td>` +
+      `<td class="n">${s.basis === "polls" ? s.n_polls : "none"}</td></tr>`;
+  }).join("");
+  body.querySelectorAll("tr").forEach((tr) => tr.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const b = tr.getBoundingClientRect(), s = govRaces.get(tr.dataset.state);
+    togglePinCard("g:" + s.state, cardHTML(s), govEl(s.state), b.left + 160, b.top);
+  }));
+  const applied = (GOV.adjustments || []).filter((g) => g.default !== "off")
+    .map((g) => g.options.find((o) => o.key === g.default).label).join("; ");
+  document.getElementById("g-method").innerHTML = `
+    <p>Each race uses the Senate model: a time-weighted average of nonpartisan general-election polls (NYT poll database), with the live default adjustments (${applied || "none"}), then ${GOV.n_sims.toLocaleString()} simulations with a national miss shared by every race and a separate miss per state. Races with no polls start from the state's 2024 presidential result.</p>
+    <p><strong>Caveats.</strong> The adjustments were fit on Senate races, and governor races are harder to call: across 1998-2022 at election eve, governor forecasts scored a log loss of 0.25, against 0.16 for the Senate, since voters split tickets more for governor. Each race is modeled as two-way, so a strong independent (as in Michigan) is not given a chance of winning outright.</p>`;
+}
+
 // ================= Tabs =================
+const VIEWS = ["senate", "house", "governor"];
+let currentView = "senate";
 function showView(name) {
-  const house = name === "house" && HOUSE;
-  document.getElementById("view-senate").hidden = !!house;
-  document.getElementById("view-house").hidden = !house;
-  document.getElementById("tab-senate").setAttribute("aria-selected", String(!house));
-  document.getElementById("tab-house").setAttribute("aria-selected", String(!!house));
+  if ((name === "house" && !HOUSE) || (name === "governor" && !GOV)) name = "senate";
+  currentView = name;
+  for (const v of VIEWS) {
+    document.getElementById("view-" + v).hidden = v !== name;
+    document.getElementById("tab-" + v).setAttribute("aria-selected", String(v === name));
+  }
   if (pinned) unpin(); else hideCard();
   // Histograms size to their container, which is zero-width while hidden.
-  if (house) renderHouseHistogram(); else renderHistogram();
+  if (name === "house") renderHouseHistogram();
+  else if (name === "governor") renderGovernor();
+  else renderHistogram();
 }
 
 renderHeader();
@@ -959,21 +1074,23 @@ if (HOUSE) {
 } else {
   document.getElementById("tabs").hidden = true;
 }
-document.getElementById("tab-senate").addEventListener("click", () => showView("senate"));
-document.getElementById("tab-house").addEventListener("click", () => showView("house"));
+for (const v of VIEWS) document.getElementById("tab-" + v).addEventListener("click", () => showView(v));
+if (!GOV) document.getElementById("tab-governor").hidden = true;
 // Arrow keys move between tabs, per the tablist pattern.
 document.getElementById("tabs").addEventListener("keydown", (ev) => {
   if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
-  const next = document.getElementById("tab-senate").getAttribute("aria-selected") === "true" ? "house" : "senate";
+  const avail = VIEWS.filter((v) => !document.getElementById("tab-" + v).hidden);
+  const step = ev.key === "ArrowRight" ? 1 : avail.length - 1;
+  const next = avail[(avail.indexOf(currentView) + step) % avail.length];
   showView(next);
   document.getElementById("tab-" + next).focus();
 });
-showView(location.hash === "#house" ? "house" : "senate");
+showView(VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "senate");
 document.addEventListener("click", () => { if (pinned) unpin(); });
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && pinned) unpin(); });
 let resizeTimer;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => (document.getElementById("view-house").hidden ? renderHistogram() : renderHouseHistogram()), 150);
+  resizeTimer = setTimeout(() => showView(currentView), 150);
 });
 </script>

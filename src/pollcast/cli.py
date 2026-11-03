@@ -103,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         from pollcast.web import load_topology, render_forecast_page
 
         result = forecast(config, as_of=args.as_of)
+        governor = forecast(config, as_of=args.as_of, race_type="governor")
         try:
             house = house_forecast(config, as_of=args.as_of)
         except RuntimeError as e:
@@ -110,9 +111,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"house: skipped ({e})", file=sys.stderr)
         out = args.out or config.data_dir / "output" / f"forecast_{result['cycle']}.html"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.with_suffix(".json").write_text(json.dumps({"senate": result, "house": house}, indent=1))
+        out.with_suffix(".json").write_text(json.dumps({"senate": result, "house": house, "governor": governor},
+                                                       indent=1))
         html = render_forecast_page(result, house, load_topology(config.data_dir / "cache"),
-                                    standalone=not args.fragment)
+                                    standalone=not args.fragment, governor=governor)
         out.write_text(html)
         c = result["control"]
         print(f"senate: {len(result['states'])} races; P(R control) {c['p_rep_control']:.1%}, "
@@ -120,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
         if house:
             print(f"house: {len(house['districts'])} districts, national {house['national']['margin']:+.1f} "
                   f"({house['national']['source']}); P(D control) {house['control']['p_dem_control']:.1%}")
+        gw = governor["control"]["challenger_wins_hist"]
+        median = next(k for k, c in zip(sorted(gw), __import__("itertools").accumulate(gw[k] for k in sorted(gw))) if c >= 0.5)
+        print(f"governor: {len(governor['states'])} races; challengers win {median} in the median simulation")
         print(f"-> {out}")
         return 0
     if args.command == "backtest" and args.history:

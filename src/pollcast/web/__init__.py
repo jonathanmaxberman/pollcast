@@ -28,7 +28,7 @@ def _embed(obj) -> str:
 
 
 def render_forecast_page(senate: dict, house: dict | None, topology: dict, *,
-                         standalone: bool = True) -> str:
+                         standalone: bool = True, governor: dict | None = None) -> str:
     """The Senate and House forecast page as HTML. Without `house`, the House tab is hidden.
 
     `standalone` adds the document wrapper a local file needs.
@@ -38,6 +38,7 @@ def render_forecast_page(senate: dict, house: dict | None, topology: dict, *,
         template.replace("/*__FORECAST__*/null", _embed(senate))
         .replace("/*__TOPOLOGY__*/null", _embed(topology))
         .replace("/*__HOUSE__*/null", _embed(house))
+        .replace("/*__GOVERNOR__*/null", _embed(governor))
     )
     if not standalone:
         return body

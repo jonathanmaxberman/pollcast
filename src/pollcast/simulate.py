@@ -473,20 +473,55 @@ def control_summary(result: dict) -> dict:
         "p_dem_majority": round(result["p_dem_majority"], 4),
         "rep_seats_hist": {s: round(float(p), 5) for s, p in result["rep_seats_hist"].items()},
         "median_seats": result["median_seats"],
+        "challenger_wins_hist": {int(k): round(float(v), 5) for k, v in result["challenger_wins_hist"].items()},
     }
 
 
-def forecast(config: Config, as_of: date | None = None) -> dict:
+# 2026 governor races; Hawaii and Wyoming have no public polls this cycle.
+GOVERNOR_RACES_2026 = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Florida",
+    "Georgia", "Hawaii", "Idaho", "Illinois", "Iowa", "Kansas", "Maine", "Maryland", "Massachusetts",
+    "Michigan", "Minnesota", "Nebraska", "Nevada", "New Hampshire", "New Mexico", "New York", "Ohio",
+    "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee",
+    "Texas", "Vermont", "Wisconsin", "Wyoming",
+]
+
+
+def presidential_priors(config: Config, states: list[str], before_year: int) -> pd.DataFrame:
+    """Fallback results for races without a prior of their own: the state's last presidential vote."""
+    from pollcast.sources.mit import president_margins
+
+    snap = latest_snapshot(config.data_dir, "mit_results")
+    raw = pd.read_csv(snap.path / "president.csv", dtype={"writein": str})
+    year = max(y for y in raw["year"].unique() if y < before_year)
+    pres = president_margins(snap.path / "president.csv")
+    m = pres[(pres["year"] == year)].set_index("state")["margin"]
+    return pd.DataFrame([{"state": st, "special": False, "DEM": float(m[st]) / 2, "REP": -float(m[st]) / 2,
+                          "IND": np.nan, "label": f"Presidential {year}"} for st in states if st in m.index])
+
+
+def forecast(config: Config, as_of: date | None = None, race_type: str = "senate") -> dict:
     """Run the simulation and return a JSON-ready forecast.
 
     One simulation per combination of adjustment choices (`scenarios`), so the
     page can switch between them; the headline is each group's default.
+    `race_type` "governor" forecasts the governor races with the same model
+    and adjustments; races without polls fall back on the state's last
+    presidential result (replaced by the fundamentals estimate when that
+    adjustment is on).
     """
-    sim = SimulateConfig(**config.simulate)
+    settings = dict(config.simulate)
+    priors = None
+    if race_type == "governor":
+        settings |= {"race_type": "governor", "party_overrides": {}}
+        priors = presidential_priors(config, GOVERNOR_RACES_2026, settings.get("cycle", 2026))
+    sim = SimulateConfig(**settings)
     as_of = as_of or datetime.now(UTC).date()
     lead = days_to_election(sim.cycle, as_of)
-    inputs = state_inputs(config, sim, as_of).reset_index(drop=True).assign(
-        cycle=sim.cycle, lead_days=lead, as_of=as_of)
+    inputs = state_inputs(config, sim, as_of, priors=priors).reset_index(drop=True)
+    if race_type == "governor":
+        inputs = inputs[inputs["state"].isin(GOVERNOR_RACES_2026)].reset_index(drop=True)
+    inputs = inputs.assign(cycle=sim.cycle, lead_days=lead, as_of=as_of, race_type=sim.race_type)
     groups, left_out = adjustment_groups(config, sim, as_of)
 
     scenarios = {}
