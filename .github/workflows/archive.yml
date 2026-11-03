@@ -1,0 +1,45 @@
+# Daily archive of time-sensitive public data.
+#
+# GDELT's API only serves ~3 months, so a missed day is lost for good. This
+# commits each day's GDELT snapshot to the `data-archive` branch, which
+# becomes the shared history new users can't collect themselves.
+#
+# Poll sources are NOT archived here: FiftyPlusOne's terms forbid
+# redistribution, and a public branch is redistribution. Fetch polls locally.
+name: archive
+
+on:
+  schedule:
+    - cron: "17 11 * * *" # 11:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  gdelt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Restore existing archive
+        run: |
+          git fetch origin data-archive || true
+          if git rev-parse --verify origin/data-archive >/dev/null 2>&1; then
+            git worktree add archive origin/data-archive
+          else
+            git worktree add --orphan -b data-archive archive
+          fi
+      - name: Fetch
+        run: |
+          mkdir -p archive/data
+          ln -s "$PWD/archive/data" data
+          uv run pollcast fetch gdelt
+      - name: Commit snapshot
+        working-directory: archive
+        run: |
+          git config user.name "pollcast-archiver"
+          git config user.email "actions@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "GDELT snapshot $(date -u +%F)"
+          git push origin HEAD:data-archive

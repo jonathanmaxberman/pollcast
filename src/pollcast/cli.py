@@ -1,0 +1,152 @@
+"""Command-line entry point: ``pollcast <command> --config configs/x.yaml``."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from dataclasses import replace
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+
+from pollcast.average import poll_margins, time_weighted_average
+from pollcast.config import load_config
+from pollcast.pipeline import build_polls, fetch, write_tables
+from pollcast.sources import SOURCES
+
+
+def _date(s: str) -> date:
+    return date.fromisoformat(s)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="pollcast")
+    parser.add_argument("--config", "-c", default="configs/polls_only.yaml")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_fetch = sub.add_parser("fetch", help="pull raw data into dated snapshots")
+    p_fetch.add_argument("sources", nargs="*", help=f"default: enabled sources ({', '.join(SOURCES)})")
+    p_fetch.add_argument("--force", action="store_true", help="re-fetch frozen archives too")
+
+    sub.add_parser("build", help="rebuild normalized Parquet tables from all snapshots")
+
+    p_avg = sub.add_parser("average", help="compute the time-weighted average")
+    p_avg.add_argument("--as-of", type=_date, help="use only data available on this date")
+    p_avg.add_argument("--cycle", type=int, help="override average.cycle from the config")
+    p_avg.add_argument("--start", type=_date)
+    p_avg.add_argument("--out", type=Path, help="CSV path (default: <data_dir>/output/...)")
+    p_avg.add_argument("--plot", action="store_true", help="also save a PNG next to the CSV")
+
+    p_map = sub.add_parser("map", help="run the Senate and House simulations and write the forecast page")
+    p_map.add_argument("--as-of", type=_date, help="use only data available on this date")
+    p_map.add_argument("--out", type=Path, help="HTML path (default: <data_dir>/output/...)")
+    p_map.add_argument("--fragment", action="store_true",
+                       help="omit the <html> wrapper (for hosts that add their own)")
+
+    p_bt = sub.add_parser("backtest", help="replay past Senate cycles and score the forecasts")
+    p_bt.add_argument("--cycles", type=int, nargs="+", default=[2018, 2020, 2022, 2024])
+    p_bt.add_argument("--leads", type=int, nargs="+", default=[0, 7, 30, 60, 90],
+                      help="days before election day to forecast from")
+    p_bt.add_argument("--n-sims", type=int, default=5000)
+
+    args = parser.parse_args(argv)
+    config = load_config(args.config)
+
+    if args.command == "fetch":
+        failed = False
+        for r in fetch(config, args.sources or None, force=args.force):
+            if r.snapshot:
+                print(f"{r.source}: {len(r.snapshot.files())} files -> {r.snapshot.path}")
+                for failure in r.snapshot.manifest().get("failures", []):
+                    failed = True
+                    print(f"{r.source}: partial: {failure}", file=sys.stderr)
+            elif r.skipped:
+                print(f"{r.source}: skipped ({r.skipped})")
+            else:
+                failed = True
+                print(f"{r.source}: FAILED: {r.error}", file=sys.stderr)
+        return 1 if failed else 0
+
+    if args.command == "build":
+        for table, n in write_tables(config).items():
+            print(f"{table}: {n} rows")
+        return 0
+
+    if args.command == "average":
+        cfg = replace(config.average, cycle=args.cycle) if args.cycle else config.average
+        margins = poll_margins(build_polls(config, as_of=args.as_of), cfg)
+        avg = time_weighted_average(margins, cfg, start=args.start, end=args.as_of)
+        if avg.empty:
+            print(f"no {cfg.race_type} polls for {cfg.cycle}", file=sys.stderr)
+            return 1
+        label = f"{cfg.race_type}_{cfg.cycle}" + (f"_asof_{args.as_of}" if args.as_of else "")
+        out = args.out or config.data_dir / "output" / f"average_{label}.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        avg.to_csv(out, index=False)
+        last = avg.iloc[-1]
+        print(f"{len(margins)} polls; {last['date'].date()}: D{last['margin']:+.1f} "
+              f"(se {last['se']:.1f}, {int(last['n_polls'])} polls weighted) -> {out}")
+        if args.plot:
+            from pollcast.plot import plot_average
+
+            title = f"{cfg.race_type.title()} ballot {cfg.cycle}: time-weighted average"
+            print(plot_average(margins, avg, title, out.with_suffix(".png")))
+        return 0
+    if args.command == "map":
+        import json
+
+        from pollcast.house import house_forecast
+        from pollcast.simulate import forecast
+        from pollcast.web import load_topology, render_forecast_page
+
+        result = forecast(config, as_of=args.as_of)
+        try:
+            house = house_forecast(config, as_of=args.as_of)
+        except RuntimeError as e:
+            house = None
+            print(f"house: skipped ({e})", file=sys.stderr)
+        out = args.out or config.data_dir / "output" / f"forecast_{result['cycle']}.html"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.with_suffix(".json").write_text(json.dumps({"senate": result, "house": house}, indent=1))
+        html = render_forecast_page(result, house, load_topology(config.data_dir / "cache"),
+                                    standalone=not args.fragment)
+        out.write_text(html)
+        c = result["control"]
+        print(f"senate: {len(result['states'])} races; P(R control) {c['p_rep_control']:.1%}, "
+              f"P(D majority) {c['p_dem_majority']:.1%}")
+        if house:
+            print(f"house: {len(house['districts'])} districts, national {house['national']['margin']:+.1f} "
+                  f"({house['national']['source']}); P(D control) {house['control']['p_dem_control']:.1%}")
+        print(f"-> {out}")
+        return 0
+    if args.command == "backtest":
+        from pollcast.backtest import run_senate_backtest
+
+        r = run_senate_backtest(config, args.cycles, args.leads, args.n_sims)
+        t = r["scores"]
+        cols = ["cycle", "lead_days", "n", "log_loss", "brier", "mae", "bias", "correct"]
+        for label, g in t.groupby("error_sizes", sort=False):
+            print(f"\n== error sizes: {label}")
+            print(g[cols].to_string(index=False, float_format=lambda v: f"{v:.3f}"))
+        print("\n== error sizes fitted from past misses (points)")
+        print(pd.DataFrame(r["fitted"]).T.to_string(float_format=lambda v: f"{v:.2f}"))
+        for name, ind in r["indicators"].items():
+            verdict = "PASSED: joins the headline forecast if enabled" if ind["accepted"] else "not accepted: stays exploratory"
+            print(f"\n== indicator {name} ({ind['expected']})")
+            t = ind["table"]
+            print(t[t["lead_days"] == "all"].to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+            metric = "seat-count log loss" if ind["metric"] == "seat_log_score" else "log loss"
+            print(f"held-out {metric} {ind['log_loss_base']:.4f} -> {ind['log_loss_indicator']:.4f} "
+                  f"({ind['improvement']:+.4f}); better in {ind['cycles_improved']}/{ind['cycles']} cycles; "
+                  f"direction as declared in every fold: {ind['direction_as_declared']}")
+            print("fitted effect per fold:", {c: round(f["effect"], 3) for c, f in ind["folds"].items()},
+                  "| all cycles:", ind["params_all_cycles"])
+            print(verdict)
+        print(f"\n-> {r['dir']}")
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

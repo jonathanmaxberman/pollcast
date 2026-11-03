@@ -1,0 +1,973 @@
+<title>Forecast 2026</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column. Headline odds, seat histogram, map with hover cards, then every race in a table. */
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #161614;
+  --muted: #5d5c57;
+  --faint: #8b8a84;
+  --rule: #e2e1dc;
+  --none: #ecebe7;      /* states with no race this cycle */
+  --none-edge: #ffffff;
+  --tossup: #dedcd5;    /* diverging midpoint: neutral gray, no hue */
+  --c1: #b7d3f6; --c2: #6da7ec; --c3: #1c5cab;   /* challenger arm: lean, likely, solid */
+  --r1: #f5c2bf; --r2: #ea8580; --r3: #c4302f;   /* Republican arm */
+  --ind-stripe: rgba(255, 255, 255, 0.75);       /* hatch over independents */
+  --focus: #161614;
+  --font-display: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1d1d1b; --fg: #f0efec; --muted: #b3b2ab; --faint: #85847e;
+    --rule: #34332f; --none: #2a2a27; --none-edge: #141413; --tossup: #4a4944;
+    --c1: #2a405e; --c2: #2b5d9f; --c3: #3d86e4;
+    --r1: #5c2b2a; --r2: #9a3433; --r3: #db4544;
+    --ind-stripe: rgba(20, 20, 19, 0.6); --focus: #f0efec;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --surface: #1d1d1b; --fg: #f0efec; --muted: #b3b2ab; --faint: #85847e;
+  --rule: #34332f; --none: #2a2a27; --none-edge: #141413; --tossup: #4a4944;
+  --c1: #2a405e; --c2: #2b5d9f; --c3: #3d86e4;
+  --r1: #5c2b2a; --r2: #9a3433; --r3: #db4544;
+  --ind-stripe: rgba(20, 20, 19, 0.6); --focus: #f0efec;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.page { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+header { display: grid; gap: 10px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 5vw, 44px); line-height: 1.08; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 18px; font-weight: 800; margin: 0; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+.lede strong { color: var(--fg); }
+
+.odds { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.odd { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 2px; }
+.odd .big { font-family: var(--font-display); font-weight: 800; font-size: 34px; line-height: 1.1; }
+.odd .label { font-size: 13px; color: var(--muted); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+
+section { display: grid; gap: 14px; min-width: 0; }
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* Seat histogram */
+.hist-wrap { position: relative; }
+#hist, #h-hist { width: 100%; height: auto; display: block; overflow: visible; }
+.hist-wrap .bar { cursor: default; }
+.hist-wrap .axis text, .hist-wrap .label { fill: var(--muted); font-size: 11px; font-family: var(--font-data); }
+.hist-wrap .label.strong { fill: var(--fg); font-family: var(--font-body); font-weight: 600; font-size: 12px; }
+
+/* Map */
+.map-wrap { position: relative; }
+#map { width: 100%; height: auto; display: block; }
+#map .state { stroke: var(--none-edge); stroke-width: 1; stroke-linejoin: round; }
+#map .state.race { cursor: pointer; }
+#map .state.race:hover, #map .state.race.active { stroke: var(--focus); stroke-width: 2; }
+#map .state.race:focus { outline: none; stroke: var(--focus); stroke-width: 2.5; }
+#map .hatch { pointer-events: none; }
+#map .tag { font-family: var(--font-data); font-size: 11px; font-weight: 500; fill: var(--fg); pointer-events: none; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.legend .ramp { display: flex; gap: 2px; align-items: center; }
+.legend .ramp span { width: 22px; height: 10px; display: block; border-radius: 1px; }
+.legend .ends { display: flex; justify-content: space-between; gap: 8px; }
+
+/* Hover card */
+.card {
+  position: fixed; z-index: 20; width: 300px; max-width: calc(100vw - 32px);
+  background: var(--surface); color: var(--fg); border: 1px solid var(--rule); border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16); padding: 14px 16px; display: grid; gap: 10px;
+  pointer-events: none; font-size: 13px;
+}
+.card[hidden] { display: none; }
+.card.pinned { pointer-events: auto; }
+.card h3 { margin: 0; font-size: 17px; font-weight: 800; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.card .rating { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.chances { display: grid; gap: 6px; }
+.chance { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+.chance .who { font-weight: 600; }
+.chance .pct { font-family: var(--font-data); font-variant-numeric: tabular-nums; font-weight: 500; }
+.chance .track { grid-column: 1 / -1; height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+.chance .fill { height: 100%; border-radius: 3px; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.spark-label { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+.spark { width: 100%; height: 54px; display: block; }
+.polls { width: 100%; border-collapse: collapse; font-size: 12px; }
+.polls th { text-align: left; color: var(--muted); font-weight: 500; padding: 2px 0; border-bottom: 1px solid var(--rule); }
+.polls td { padding: 3px 0; border-bottom: 1px solid var(--rule); }
+.polls td.n, .polls th.n { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; padding-left: 8px; }
+.polls td.who { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note { color: var(--muted); font-size: 12px; margin: 0; }
+
+/* Race table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table.races { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+.races th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+.races td { padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.races tr:last-child td { border-bottom: 0; }
+.races tbody tr { cursor: pointer; }
+.races tbody tr:hover td, .races tbody tr:focus-within td { background: color-mix(in srgb, var(--rule) 40%, transparent); }
+.races .n { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.races button.state-btn { all: unset; font-weight: 600; cursor: pointer; }
+.races button.state-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+.split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; min-width: 120px; gap: 2px; }
+.split span { display: block; height: 100%; }
+
+.method { display: grid; gap: 10px; color: var(--muted); font-size: 13px; max-width: 70ch; }
+.method p { margin: 0; }
+.method strong { color: var(--fg); }
+.method code { font-family: var(--font-data); font-size: 12px; }
+
+.adjust { display: grid; gap: 12px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; }
+.adjust h2 { font-size: 15px; }
+.adjust fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.adjust legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
+.adjust .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.adjust label.opt { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; flex: 1 1 220px; min-width: 0; }
+.adjust label.opt:has(input:checked) { border-color: var(--fg); }
+.adjust label.opt:has(input:disabled) { cursor: not-allowed; opacity: 0.55; }
+.adjust input[type="radio"] { margin: 3px 0 0; accent-color: var(--fg); }
+.adjust input[type="radio"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.adjust .opt-name { font-weight: 600; font-size: 13px; }
+.adjust .opt-meta { grid-column: 2; font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; border: 1px solid var(--rule); color: var(--muted); }
+.badge.pass { border-color: var(--c2); color: var(--fg); }
+.badge.fail { border-color: var(--r2); }
+.adjust .note { margin: 0; }
+.leftout { border-top: 1px solid var(--rule); padding-top: 12px; display: grid; gap: 6px; }
+.leftout summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg); }
+.leftout summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+.leftout ul { margin-top: 8px; }
+.leftout ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.leftout li strong { color: var(--fg); font-weight: 600; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); }
+.tabs button { all: unset; cursor: pointer; padding: 10px 16px 9px; font-weight: 800; font-size: 15px; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+.tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 3px; }
+.view { display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; }
+.view[hidden] { display: none; }
+#h-map { width: 100%; height: auto; display: block; }
+#h-map .hex { stroke: var(--bg); stroke-width: 0.5; cursor: pointer; }
+#h-map .hex:hover, #h-map .hex.active { stroke: var(--focus); stroke-width: 1.6; }
+#h-map .hex:focus { outline: none; stroke: var(--focus); stroke-width: 2; }
+#h-map .border { stroke: var(--bg); stroke-width: 3.6; stroke-linecap: round; fill: none; pointer-events: none; }
+#h-map .st { font-family: var(--font-data); font-size: 8px; font-weight: 500; fill: var(--fg); text-anchor: middle; dominant-baseline: central; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); }
+.filters input[type="search"] { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; min-width: 0; width: 240px; max-width: 100%; }
+.filters input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.filters label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+
+@media (max-width: 560px) {
+  .card { left: 12px !important; right: 12px; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; pointer-events: auto; }
+  .odd .big { font-size: 28px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #map .state { transition: stroke-width 80ms ease; }
+}
+</style>
+
+<div class="page">
+  <nav class="tabs" role="tablist" aria-label="Chamber" id="tabs">
+    <button type="button" role="tab" id="tab-senate" aria-controls="view-senate" aria-selected="true">Senate</button>
+    <button type="button" role="tab" id="tab-house" aria-controls="view-house" aria-selected="false">House</button>
+  </nav>
+
+  <div class="view" id="view-senate" role="tabpanel" aria-labelledby="tab-senate">
+  <header>
+    <div class="eyebrow" id="eyebrow">US Senate · 2026</div>
+    <h1 id="headline">Senate forecast</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <div class="odds" id="odds"></div>
+
+  <section class="adjust" id="adjust" aria-labelledby="adjust-title" hidden>
+    <h2 id="adjust-title">Adjustments</h2>
+    <div id="adjust-groups" style="display:grid;gap:14px"></div>
+    <p class="note">Only adjustments that passed their backtest are offered. Each starts on Off unless it is turned on in the config. Changing one redraws the odds, seat chart, map and table.</p>
+    <p class="note" id="adjust-missing" role="status" hidden>This combination wasn't precomputed. Change one group at a time from the defaults, or rerun <code>pollcast map</code> with fewer adjustments configured.</p>
+  </section>
+
+  <section aria-labelledby="hist-title">
+    <div class="section-head">
+      <h2 id="hist-title">Republican seats after the election</h2>
+      <p class="hint" id="hist-hint"></p>
+    </div>
+    <div class="hist-wrap"><svg id="hist" role="img" aria-labelledby="hist-title"></svg></div>
+  </section>
+
+  <section aria-labelledby="map-title">
+    <div class="section-head">
+      <h2 id="map-title">Chance of winning each race</h2>
+      <p class="hint">Hover or tap a state. Click to pin its card.</p>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="map-wrap"><svg id="map" viewBox="0 0 975 610" role="img" aria-labelledby="map-title"></svg></div>
+  </section>
+
+  <section aria-labelledby="table-title">
+    <div class="section-head">
+      <h2 id="table-title">Every race</h2>
+      <p class="hint">Closest first. Margins are the polling average: challenger minus Republican.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="races">
+        <thead><tr><th>State</th><th>Challenger</th><th>Odds</th><th class="n">Chance</th><th class="n">Avg margin</th><th class="n">80% range</th><th class="n">Polls</th></tr></thead>
+        <tbody id="race-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="method" aria-labelledby="method-title">
+    <h2 id="method-title" style="color: var(--fg)">How this works</h2>
+    <div id="method"></div>
+  </section>
+  </div>
+
+  <div class="view" id="view-house" role="tabpanel" aria-labelledby="tab-house" hidden>
+  <header>
+    <div class="eyebrow" id="h-eyebrow">US House · 2026</div>
+    <h1 id="h-headline">House forecast</h1>
+    <p class="lede" id="h-lede"></p>
+  </header>
+
+  <div class="odds" id="h-odds"></div>
+
+  <section aria-labelledby="h-hist-title">
+    <div class="section-head">
+      <h2 id="h-hist-title">Democratic seats after the election</h2>
+      <p class="hint" id="h-hist-hint"></p>
+    </div>
+    <div class="hist-wrap"><svg id="h-hist" role="img" aria-labelledby="h-hist-title"></svg></div>
+  </section>
+
+  <section aria-labelledby="h-map-title">
+    <div class="section-head">
+      <h2 id="h-map-title">Chance of winning each district</h2>
+      <p class="hint">One hexagon per district, grouped by state. Hover or tap; click to pin.</p>
+    </div>
+    <div class="legend" id="h-legend"></div>
+    <div class="map-wrap"><svg id="h-map" role="img" aria-labelledby="h-map-title"></svg></div>
+  </section>
+
+  <section aria-labelledby="h-table-title">
+    <div class="section-head">
+      <h2 id="h-table-title">Districts</h2>
+      <p class="hint">Closest first. Margins are Democrat minus Republican.</p>
+    </div>
+    <div class="filters">
+      <input type="search" id="h-filter" placeholder="Find a district or incumbent" aria-label="Find a district or incumbent">
+      <label><input type="checkbox" id="h-competitive" checked> Competitive only (5% to 95%)</label>
+      <span id="h-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="races">
+        <thead><tr><th>District</th><th>Incumbent</th><th>Odds</th><th class="n">Chance</th><th class="n">Expected</th><th class="n">80% range</th><th class="n">2024 pres.</th></tr></thead>
+        <tbody id="h-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="method" aria-labelledby="h-method-title">
+    <h2 id="h-method-title" style="color: var(--fg)">How this works</h2>
+    <div id="h-method"></div>
+  </section>
+  </div>
+</div>
+
+<div class="card" id="card" role="dialog" aria-live="polite" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script>
+const FORECAST = /*__FORECAST__*/null;
+const TOPOLOGY = /*__TOPOLOGY__*/null;
+const HOUSE = /*__HOUSE__*/null;
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const pct = (p) => {
+  const v = p * 100;
+  if (v > 99) return ">99%";
+  if (v < 1) return "<1%";
+  return Math.round(v) + "%";
+};
+const partyName = { DEM: "Democrat", IND: "Independent", REP: "Republican" };
+const partyShort = { DEM: "D", IND: "I", REP: "R" };
+const fmtMargin = (m, challenger) =>
+  Math.abs(m) < 0.05 ? "Even" : (m > 0 ? partyShort[challenger] : "R") + "+" + Math.abs(m).toFixed(1);
+const fmtPct = (v) => (v == null ? "–" : String(Math.round(v * 10) / 10));
+const fmtDate = (s) => new Date(s + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+// Ratings bin the challenger's win probability. Thresholds are symmetric.
+function rating(p) {
+  if (p >= 0.95) return { key: "c3", label: "Solid" , side: "c" };
+  if (p >= 0.75) return { key: "c2", label: "Likely", side: "c" };
+  if (p >= 0.60) return { key: "c1", label: "Lean", side: "c" };
+  if (p > 0.40) return { key: "tossup", label: "Toss-up", side: null };
+  if (p > 0.25) return { key: "r1", label: "Lean", side: "r" };
+  if (p > 0.05) return { key: "r2", label: "Likely", side: "r" };
+  return { key: "r3", label: "Solid", side: "r" };
+}
+const ratingText = (s) => {
+  const r = rating(s.p_challenger);
+  if (!r.side) return "Toss-up";
+  return r.label + " " + (r.side === "c" ? partyShort[s.challenger] : "R");
+};
+const fillFor = (s) => `var(--${rating(s.p_challenger).key})`;
+const inkOn = (s) => {
+  const k = rating(s.p_challenger).key;
+  return k === "c3" || k === "r3" || k === "c2" || k === "r2" ? "var(--surface)" : "var(--fg)";
+};
+
+let races = new Map(FORECAST.states.map((s) => [s.state, s]));
+let control = FORECAST.control;
+// Current radio choice per adjustment group: {module: option key}.
+const choice = Object.fromEntries((FORECAST.adjustments || []).map((g) => [g.module, g.default]));
+const scenarioId = (c) => Object.keys(c).sort().map((m) => `${m}=${c[m]}`).join("|");
+
+// ---------- Header ----------
+function renderHeader() {
+  const asOf = new Date(FORECAST.as_of + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  document.getElementById("eyebrow").textContent = `US Senate · ${FORECAST.cycle} · Forecast as of ${asOf}`;
+  const pR = control.p_rep_control;
+  const inHundred = (p) => Math.max(0, Math.min(100, Math.round(p * 100)));
+  document.getElementById("headline").textContent =
+    `Republicans keep the Senate in ${inHundred(pR)} of 100 simulations`;
+  const m = control.median_seats;
+  document.getElementById("lede").innerHTML =
+    `Across ${FORECAST.n_sims.toLocaleString()} simulated elections, the median outcome is ` +
+    `<strong>${m.REP} Republican</strong>, <strong>${m.DEM} Democratic</strong>` +
+    (m.IND > 0 ? ` and <strong>${m.IND} independent</strong>` : "") +
+    ` seats. Republicans need ${FORECAST.assumptions.rep_control_seats} seats for control, since the vice president breaks ties.`;
+  const odds = [
+    { v: pR, label: "Republicans keep control", color: "var(--r3)" },
+    { v: control.p_dem_majority, label: "Democrats win a majority (51+)", color: "var(--c3)" },
+    { v: Math.max(0, 1 - pR - control.p_dem_majority), label: "Independents hold the balance", color: "var(--tossup)" },
+  ];
+  document.getElementById("odds").innerHTML = odds.map((o) =>
+    `<div class="odd"><div class="big num">${pct(o.v)}</div><div class="label"><span class="swatch" style="background:${o.color}"></span>${o.label}</div></div>`
+  ).join("");
+}
+
+// ---------- Seat histogram (shared) ----------
+// hist: {seats: share}. Bars at or above `threshold` take `above.color`.
+function drawSeatHistogram(svgId, hist, threshold, nSims, opt) {
+  const svg = d3.select("#" + svgId);
+  const data = Object.entries(hist).map(([s, p]) => ({ seats: +s, p }));
+  // Trim long thin tails so the shape is readable; keep 99.8% of the mass.
+  let lo = d3.min(data, (d) => d.seats), hi = d3.max(data, (d) => d.seats);
+  const cum = (cut) => d3.sum(data.filter((d) => d.seats < cut), (d) => d.p);
+  while (cum(lo + 1) < 0.001) lo++;
+  while (1 - cum(hi) < 0.001) hi--;
+  const shown = data.filter((d) => d.seats >= lo && d.seats <= hi);
+  // Size the drawing to the container so labels stay legible at phone width.
+  const W = Math.max(320, Math.round(svg.node().parentNode.clientWidth || 960));
+  const H = W < 560 ? 180 : 220, m = { t: 30, r: 8, b: 26, l: 8 };
+  svg.selectAll("*").remove();
+  svg.attr("viewBox", `0 0 ${W} ${H}`);
+  const x = d3.scaleBand().domain(d3.range(lo, hi + 1)).range([m.l, W - m.r]).paddingInner(shown.length > 60 ? 0.2 : 0.12);
+  const y = d3.scaleLinear().domain([0, d3.max(shown, (d) => d.p)]).nice().range([H - m.b, m.t]);
+
+  svg.append("g").selectAll("rect").data(shown).join("rect")
+    .attr("class", "bar")
+    .attr("x", (d) => x(d.seats)).attr("width", x.bandwidth())
+    .attr("y", (d) => y(d.p)).attr("height", (d) => Math.max(0, y(0) - y(d.p)))
+    .attr("rx", Math.min(4, x.bandwidth() / 3))
+    .attr("fill", (d) => (d.seats >= threshold ? opt.above.color : opt.below.color));
+
+  // Baseline over the bars' squared bottoms.
+  svg.append("line").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(0)).attr("y2", y(0))
+    .attr("stroke", "var(--rule)").attr("stroke-width", 1);
+
+  // Ticks every 2, 4, 5, 10... seats, whatever keeps labels about 36px apart.
+  const every = [2, 4, 5, 10, 20, 25, 50].find((k) => k * x.step() >= 36) || 50;
+  const ticks = d3.range(lo, hi + 1).filter((s) => s % every === 0);
+  svg.append("g").attr("class", "axis").selectAll("text").data(ticks).join("text")
+    .attr("x", (s) => x(s) + x.bandwidth() / 2).attr("y", H - 8).attr("text-anchor", "middle").text((s) => s);
+
+  if (threshold >= lo && threshold <= hi) {
+    const tx = x(threshold) - (x.step() - x.bandwidth()) / 2;
+    svg.append("line").attr("x1", tx).attr("x2", tx).attr("y1", m.t - 18).attr("y2", y(0))
+      .attr("stroke", "var(--fg)").attr("stroke-dasharray", "3 3").attr("stroke-width", 1);
+    const narrow = W < 560;
+    svg.append("text").attr("class", "label strong").attr("x", tx + 6).attr("y", m.t - 10).text((narrow ? opt.above.short : opt.above.label) + " →");
+    svg.append("text").attr("class", "label strong").attr("x", tx - 6).attr("y", m.t - 10).attr("text-anchor", "end").text("← " + (narrow ? opt.below.short : opt.below.label));
+  }
+  document.getElementById(opt.hintId).textContent = `Share of ${nSims.toLocaleString()} simulations ending with each seat count`;
+
+  // Hover: per-bar card, with a hit target the full column height.
+  svg.append("g").selectAll("rect").data(shown).join("rect")
+    .attr("x", (d) => x(d.seats) - (x.step() - x.bandwidth()) / 2).attr("width", x.step())
+    .attr("y", m.t).attr("height", y(0) - m.t).attr("fill", "transparent")
+    .on("pointermove", (ev, d) => showCard(null,
+      `<h3>${d.seats} ${opt.noun}</h3><p class="note" style="color:var(--fg)">${(d.p * 100).toFixed(1)}% of simulations. ` +
+      (d.seats >= threshold ? opt.above.outcome : opt.below.outcome) + `</p>`, null, ev.clientX, ev.clientY))
+    .on("pointerleave", () => hideCard());
+}
+
+function renderHistogram() {
+  drawSeatHistogram("hist", control.rep_seats_hist, FORECAST.assumptions.rep_control_seats, FORECAST.n_sims, {
+    noun: "Republican seats", hintId: "hist-hint",
+    above: { color: "var(--r2)", label: "Republican control", short: "R control", outcome: "Republicans control." },
+    below: { color: "var(--c2)", label: "No Republican majority", short: "No R majority", outcome: "Republicans lose control." },
+  });
+}
+
+// ---------- Hover card (shared) ----------
+let pinned = null;
+let activeEl = null;
+const tip = document.getElementById("card");
+function setActive(el) {
+  if (activeEl) activeEl.classList.remove("active");
+  activeEl = el || null;
+  if (activeEl) activeEl.classList.add("active");
+}
+function showCard(key, html, el, cx, cy) {
+  if (pinned) return;
+  tip.innerHTML = html;
+  tip.hidden = false;
+  setActive(el);
+  place(cx, cy);
+}
+function hideCard() {
+  if (pinned) return;
+  tip.hidden = true;
+  setActive(null);
+}
+function togglePinCard(key, html, el, cx, cy) {
+  if (pinned === key) { unpin(); return; }
+  pinned = null;
+  showCard(key, html, el, cx, cy);
+  pinned = key;
+  tip.classList.add("pinned");
+}
+function unpin() {
+  pinned = null;
+  tip.classList.remove("pinned");
+  tip.hidden = true;
+  setActive(null);
+}
+
+// ---------- Senate map ----------
+function renderMap() {
+  const svg = d3.select("#map");
+  svg.selectAll("*").remove();
+  const path = d3.geoPath();
+  const features = topojson.feature(TOPOLOGY, TOPOLOGY.objects.states).features;
+
+  const defs = svg.append("defs");
+  const pat = defs.append("pattern").attr("id", "ind-hatch").attr("patternUnits", "userSpaceOnUse")
+    .attr("width", 6).attr("height", 6).attr("patternTransform", "rotate(45)");
+  pat.append("rect").attr("width", 2).attr("height", 6).attr("fill", "var(--ind-stripe)");
+
+  const g = svg.append("g");
+  g.selectAll("path").data(features).join("path")
+    .attr("class", (f) => "state" + (races.has(f.properties.name) ? " race" : ""))
+    .attr("d", path)
+    .attr("fill", (f) => (races.has(f.properties.name) ? fillFor(races.get(f.properties.name)) : "var(--none)"))
+    .attr("tabindex", (f) => (races.has(f.properties.name) ? 0 : null))
+    .attr("role", (f) => (races.has(f.properties.name) ? "button" : null))
+    .attr("aria-label", (f) => {
+      const s = races.get(f.properties.name);
+      return s ? `${s.state}: ${ratingText(s)}, ${partyName[s.challenger]} ${pct(s.p_challenger)}, Republican ${pct(1 - s.p_challenger)}` : null;
+    })
+    .each(function (f) { this.__name = f.properties.name; })
+    .on("pointermove", function (ev, f) { if (races.has(f.properties.name)) hover(this, f.properties.name, ev.clientX, ev.clientY); })
+    .on("pointerleave", () => unhover())
+    .on("click", function (ev, f) {
+      if (!races.has(f.properties.name)) return;
+      ev.stopPropagation();
+      togglePin(this, f.properties.name, ev.clientX, ev.clientY);
+    })
+    .on("focus", function (ev, f) {
+      if (!races.has(f.properties.name)) return;
+      const b = this.getBoundingClientRect();
+      hover(this, f.properties.name, b.right, b.top + b.height / 2);
+    })
+    .on("blur", () => unhover())
+    .on("keydown", function (ev, f) {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        const b = this.getBoundingClientRect();
+        togglePin(this, f.properties.name, b.right, b.top + b.height / 2);
+      }
+    });
+
+  // Hatch independents so they don't read as Democrats.
+  g.selectAll("path.hatch").data(features.filter((f) => races.get(f.properties.name)?.challenger === "IND"))
+    .join("path").attr("class", "hatch").attr("d", path).attr("fill", "url(#ind-hatch)");
+
+  // Small-state tags for the northeast, where shapes are too small to hover easily.
+  const small = { "Rhode Island": [930, 205], "Delaware": [918, 262], "New Jersey": [928, 238], "Massachusetts": [944, 178], "New Hampshire": [946, 150] };
+  for (const [name, [tx, ty]] of Object.entries(small)) {
+    const s = races.get(name); if (!s) continue;
+    const f = features.find((d) => d.properties.name === name);
+    const [cx, cy] = path.centroid(f);
+    g.append("line").attr("x1", cx).attr("y1", cy).attr("x2", tx - 14).attr("y2", ty - 4).attr("stroke", "var(--faint)").attr("stroke-width", 0.75);
+    const tag = g.append("g").attr("class", "race-tag").style("cursor", "pointer")
+      .on("pointermove", (ev) => hover(null, name, ev.clientX, ev.clientY))
+      .on("pointerleave", () => unhover())
+      .on("click", (ev) => { ev.stopPropagation(); togglePin(null, name, ev.clientX, ev.clientY); });
+    tag.append("rect").attr("x", tx - 14).attr("y", ty - 11).attr("width", 28).attr("height", 14).attr("rx", 3).attr("fill", fillFor(s));
+    tag.append("text").attr("class", "tag").attr("x", tx).attr("y", ty).style("stroke", "none").style("fill", inkOn(s)).text(abbr[name]);
+  }
+
+
+  const sw = (k) => `<span style="background:var(--${k})"></span>`;
+  document.getElementById("legend").innerHTML =
+    `<div class="ramp">${sw("r3")}${sw("r2")}${sw("r1")}${sw("tossup")}${sw("c1")}${sw("c2")}${sw("c3")}</div>` +
+    `<span>Republican ← Solid · Likely · Lean · Toss-up · Lean · Likely · Solid → Challenger</span>` +
+    `<span><span class="swatch" style="background:var(--c2);background-image:repeating-linear-gradient(45deg,var(--ind-stripe) 0 2px,transparent 2px 6px)"></span>Independent challenger</span>` +
+    `<span><span class="swatch" style="background:var(--none)"></span>No race</span>`;
+}
+
+const abbr = { "Rhode Island": "RI", "Delaware": "DE", "New Jersey": "NJ", "Massachusetts": "MA", "New Hampshire": "NH" };
+
+function cardHTML(s) {
+  const r = rating(s.p_challenger);
+  const ratingBg = `var(--${r.key})`;
+  const ratingInk = inkOn(s);
+  const pC = s.p_challenger, pR = 1 - s.p_challenger;
+  const rows = [
+    { who: partyName[s.challenger], p: pC, color: s.challenger === "IND" ? "var(--c2)" : "var(--c3)" },
+    { who: "Republican", p: pR, color: "var(--r3)" },
+  ].sort((a, b) => b.p - a.p);
+  const chances = rows.map((o) =>
+    `<div class="chance"><span class="who">${o.who}</span><span class="pct">${pct(o.p)}</span>` +
+    `<span class="track"><span class="fill" style="display:block;width:${(o.p * 100).toFixed(1)}%;background:${o.color}"></span></span></div>`
+  ).join("");
+  const [lo, hi] = s.interval80;
+  const basis = s.basis === "polls"
+    ? `${s.n_polls} nonpartisan poll${s.n_polls === 1 ? "" : "s"} weighted`
+    : s.basis === "stale"
+      ? `No recent polls. Based on the last one, the ${s.prior_label}, with wide uncertainty`
+      : `No nonpartisan polls. Based on ${(s.prior_label || "the last result").replace("Election ", "the ")} result`;
+  const facts =
+    `<dl class="facts">` +
+    (s.basis === "polls" && Math.abs(s.mean - s.poll_mean) >= 0.05
+      ? `<dt>Polling average</dt><dd>${fmtMargin(s.poll_mean, s.challenger)}</dd><dt>After adjustments</dt><dd>${fmtMargin(s.mean, s.challenger)}</dd>`
+      : `<dt>${s.basis === "polls" ? "Polling average" : "Expected margin"}</dt><dd>${fmtMargin(s.mean, s.challenger)}</dd>`) +
+    `<dt>80% of simulations</dt><dd>${fmtMargin(lo, s.challenger)} to ${fmtMargin(hi, s.challenger)}</dd></dl>`;
+  const spark = s.trend.length > 1 ? sparkline(s) : "";
+  const polls = s.recent_polls.length
+    ? `<table class="polls"><thead><tr><th>Recent polls</th><th class="n">${partyShort[s.challenger]}</th><th class="n">R</th><th class="n">Ended</th></tr></thead><tbody>` +
+      s.recent_polls.slice(0, 4).map((p) =>
+        `<tr><td class="who" title="${p.pollster}">${p.pollster}</td><td class="n">${fmtPct(p[s.challenger])}</td><td class="n">${fmtPct(p.REP)}</td><td class="n">${fmtDate(p.end_date)}</td></tr>`
+      ).join("") + `</tbody></table>`
+    : "";
+  return `<h3><span>${s.state}</span><span class="rating" style="background:${ratingBg};color:${ratingInk}">${ratingText(s)}</span></h3>` +
+    `<div class="chances">${chances}</div>${facts}${spark}${polls}<p class="note">${basis}.</p>`;
+}
+
+function sparkline(s) {
+  const W = 268, H = 54, pad = 4;
+  const pts = s.trend.map(([d, m]) => [new Date(d + "T12:00:00"), m]);
+  const x = d3.scaleTime().domain(d3.extent(pts, (p) => p[0])).range([pad, W - pad]);
+  const ext = d3.extent(pts, (p) => p[1]);
+  const span = Math.max(4, Math.abs(ext[0]), Math.abs(ext[1]));
+  const y = d3.scaleLinear().domain([-span, span]).range([H - pad, pad]);
+  const line = d3.line().x((p) => x(p[0])).y((p) => y(p[1]));
+  const last = pts[pts.length - 1];
+  const ink = last[1] >= 0 ? "var(--c3)" : "var(--r3)";
+  return `<div><div class="spark-label"><span>Polling average since ${fmtDate(s.trend[0][0])}</span><span>${partyShort[s.challenger]} above line, R below</span></div>` +
+    `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+    `<line x1="${pad}" x2="${W - pad}" y1="${y(0)}" y2="${y(0)}" stroke="var(--faint)" stroke-dasharray="2 3" stroke-width="1"/>` +
+    `<path d="${line(pts)}" fill="none" stroke="${ink}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` +
+    `<circle cx="${x(last[0])}" cy="${y(last[1])}" r="3.5" fill="${ink}" stroke="var(--surface)" stroke-width="2"/></svg></div>`;
+}
+
+function place(cx, cy) {
+  if (window.matchMedia("(max-width: 560px)").matches) return; // CSS docks it to the bottom
+  const r = tip.getBoundingClientRect();
+  let left = cx + 16, top = cy + 16;
+  if (left + r.width > window.innerWidth - 12) left = cx - r.width - 16;
+  if (top + r.height > window.innerHeight - 12) top = Math.max(12, window.innerHeight - r.height - 12);
+  tip.style.left = Math.max(12, left) + "px";
+  tip.style.top = top + "px";
+}
+
+function stateEl(name) {
+  return [...document.querySelectorAll("#map .state.race")].find((p) => p.__name === name);
+}
+const hover = (el, name, cx, cy) => showCard("s:" + name, cardHTML(races.get(name)), el || stateEl(name), cx, cy);
+const unhover = () => hideCard();
+const togglePin = (el, name, cx, cy) => togglePinCard("s:" + name, cardHTML(races.get(name)), el || stateEl(name), cx, cy);
+
+// ---------- Table ----------
+function renderTable() {
+  const rows = [...FORECAST.states].sort((a, b) => Math.abs(a.p_challenger - 0.5) - Math.abs(b.p_challenger - 0.5));
+  const body = document.getElementById("race-rows");
+  body.innerHTML = rows.map((s) => {
+    const pC = s.p_challenger;
+    const cColor = s.challenger === "IND" ? "var(--c2)" : "var(--c3)";
+    return `<tr data-state="${s.state}">` +
+      `<td><button class="state-btn" type="button">${s.state}</button></td>` +
+      `<td>${partyName[s.challenger]}</td>` +
+      `<td><div class="split" aria-hidden="true"><span style="width:${(pC * 100).toFixed(1)}%;background:${cColor}"></span><span style="flex:1;background:var(--r3)"></span></div></td>` +
+      `<td class="n">${partyShort[s.challenger]} ${pct(pC)}</td>` +
+      `<td class="n">${fmtMargin(s.mean, s.challenger)}</td>` +
+      `<td class="n">${fmtMargin(s.interval80[0], s.challenger)} to ${fmtMargin(s.interval80[1], s.challenger)}</td>` +
+      `<td class="n">${s.basis === "polls" ? s.n_polls : "none"}</td></tr>`;
+  }).join("");
+  body.querySelectorAll("tr").forEach((tr) => {
+    tr.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const b = tr.getBoundingClientRect();
+      togglePin(stateEl(tr.dataset.state), tr.dataset.state, b.left + 160, b.top);
+    });
+  });
+}
+
+const statusText = {
+  baseline: "No adjustment",
+  passed: "Passed its backtest",
+  failed: "Failed its backtest",
+  untested: "Not yet backtested",
+};
+function optionScore(o) {
+  if (o.improvement == null) return "";
+  const metric = o.metric === "seat_log_score" ? "seat-count score" : "log loss";
+  return `Held-out ${metric} ${o.improvement >= 0 ? "improved" : "worsened"} by ${Math.abs(o.improvement).toFixed(4)}, better in ${o.cycles_improved} cycles` +
+    (o.direction_as_declared ? "" : "; direction not as declared in every fold");
+}
+
+// A variant's name is whatever its label adds to the group's, e.g. "(last 30 days only)".
+function optionName(g, o) {
+  if (o.key === "off") return "Off";
+  const extra = o.label.replace(g.label, "").replace(/^\s*\(|\)\s*$/g, "").trim();
+  return extra ? extra.charAt(0).toUpperCase() + extra.slice(1) : "Apply";
+}
+
+function leftOutHTML() {
+  const list = FORECAST.left_out || [];
+  if (!list.length) return "";
+  const line = (o) => `<li><strong>${o.label}</strong> (${o.status === "failed" ? "failed" : "not testable yet"}). ` +
+    (o.reason ? `${o.reason.charAt(0).toUpperCase() + o.reason.slice(1)}.` : `${optionScore(o)}.`) + `</li>`;
+  return { summary: `Tested and left out (${list.length}): ideas that failed their backtest or can't be tested yet`,
+           items: list.map(line).join("") };
+}
+
+function renderAdjustments() {
+  const groups = FORECAST.adjustments || [];
+  const panel = document.getElementById("adjust");
+  panel.hidden = !groups.length;
+  document.getElementById("adjust-groups").innerHTML = groups.map((g) => `
+    <fieldset>
+      <legend>${g.label}</legend>
+      <div class="opts">${g.options.map((o) => {
+        const id = `adj-${g.module}-${o.key}`;
+        const badge = o.status === "passed" ? `<span class="badge pass">passed${o.post_hoc ? ", post hoc" : ""}${o.enabled ? "" : ", off in config"}</span>`
+          : o.status === "failed" ? `<span class="badge fail">failed</span>`
+          : o.status === "untested" ? `<span class="badge">untested</span>` : "";
+        const isDefault = o.key === g.default ? ` <span class="badge">default</span>` : "";
+        const meta = o.key === "off" ? "The polling average as is."
+          : o.reason ? `Can't be tested yet: ${o.reason}.`
+          : [optionScore(o), o.available ? "" : "Run the backtest to enable it."].filter(Boolean).join(". ");
+        return `<label class="opt" for="${id}"><input type="radio" id="${id}" name="adj-${g.module}" value="${o.key}" ${choice[g.module] === o.key ? "checked" : ""} ${o.available ? "" : "disabled"}>` +
+          `<span class="opt-name">${optionName(g, o)}${badge}${isDefault}</span>` +
+          `<span class="opt-meta">${meta}</span></label>`;
+      }).join("")}</div>
+    </fieldset>`).join("");
+  panel.querySelectorAll('input[type="radio"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      choice[input.name.slice(4)] = input.value;
+      applyScenario();
+    });
+  });
+}
+
+function applyScenario() {
+  const sc = FORECAST.scenarios && FORECAST.scenarios[scenarioId(choice)];
+  document.getElementById("adjust-missing").hidden = !!sc;
+  if (!sc) return;
+  FORECAST.control = control = sc.control;
+  FORECAST.states.forEach((s, i) => {
+    const [p, mean, lo, hi] = sc.states[i];
+    s.p_challenger = p; s.mean = mean; s.interval80 = [lo, hi];
+  });
+  races = new Map(FORECAST.states.map((s) => [s.state, s]));
+  if (pinned) unpin();
+  renderHeader();
+  renderHistogram();
+  renderMap();
+  renderTable();
+  renderMethod();
+}
+
+function indicatorsHTML() {
+  const groups = FORECAST.adjustments || [];
+  if (!groups.length && !(FORECAST.left_out || []).length) return "";
+  const items = groups.flatMap((g) => g.options.filter((o) => o.key !== "off").map((o) => {
+    const on = choice[g.module] === o.key;
+    const postHoc = o.post_hoc ? " <em>A second try whose cutoff was chosen after seeing the first version fail, so its pass is weaker evidence than a first-try pass.</em>" : "";
+    return `<li><strong>${o.label}.</strong> ${statusText[o.status]}${o.improvement != null ? ": " + optionScore(o).charAt(0).toLowerCase() + optionScore(o).slice(1) : ""}. ${on ? "Applied to the odds above." : "Not applied."}${postHoc}</li>`;
+  })).join("");
+  const left = leftOutHTML();
+  return `<p><strong>Adjustments.</strong> Each declares its expected effect before testing and is offered only if it improves held-out accuracy with that effect.</p>` +
+    (items ? `<ul style="margin:0;padding-left:20px;display:grid;gap:6px">${items}</ul>` : "") +
+    (left ? `<details class="leftout"><summary>${left.summary}</summary><ul>${left.items}</ul></details>` : "");
+}
+
+function renderMethod() {
+  const a = FORECAST.assumptions;
+  document.getElementById("method").innerHTML = `
+    <p>Each state's expected margin is a time-weighted average of its nonpartisan polls: recent polls, bigger samples and pollsters that poll less often count for more. States with no recent polls fall back on their last Senate result.</p>
+    <p>Each of the <strong>${FORECAST.n_sims.toLocaleString()}</strong> simulated elections adds one <strong>national polling miss</strong> shared by every state (standard deviation ${a.national_sd} points) and a separate <strong>state miss</strong> (${a.state_sd} points, plus more where polls are thin; ${a.prior_sd} points with no polls). Both have fat tails (Student-t, ${a.t_df} degrees of freedom), so states tend to miss in the same direction and large misses happen more often than a bell curve allows.</p>
+    <p>Where an independent is the Republican's main opponent (hatched on the map), the race is modeled as independent versus Republican. Seats not up this cycle: ${a.seats_not_up.REP} Republican, ${a.seats_not_up.DEM} Democratic, counting independents who caucus with Democrats.</p>
+    <p><strong>Backtested against 2018 to 2024</strong> (137 Senate races, polls as released at the time): these error sizes hold up out of sample, and versions fit to past misses did no better. With four cycles, they are still rough.</p>
+    ${indicatorsHTML()}
+    <p>Generated by pollcast with config <code>${FORECAST.config}</code> on ${FORECAST.generated_at.replace("T", " ").replace("+00:00", " UTC")}. Polls: The New York Times poll database (nonpartisan, general-election polls only), with Electoral-vote.com where the Times has none.</p>`;
+}
+
+// ================= House =================
+const hShort = (m, ch = "DEM") => (Math.abs(m) < 0.05 ? "Even" : (m > 0 ? partyShort[ch] : "R") + "+" + Math.abs(m).toFixed(1));
+const hRatingText = (p, ch = "DEM") => {
+  const r = rating(p);
+  return r.side ? r.label + " " + (r.side === "c" ? partyShort[ch] : "R") : "Toss-up";
+};
+const hInk = (p) => (["c3", "r3", "c2", "r2"].includes(rating(p).key) ? "var(--surface)" : "var(--fg)");
+const districts = HOUSE ? new Map(HOUSE.districts.map((d) => [d.id, d])) : new Map();
+const hexEls = new Map();
+
+function renderHouseHeader() {
+  const c = HOUSE.control, n = HOUSE.national;
+  const asOf = new Date(HOUSE.as_of + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  document.getElementById("h-eyebrow").textContent = `US House · ${HOUSE.cycle} · Forecast as of ${asOf}`;
+  const pD = c.p_dem_control;
+  const leader = pD >= 0.5 ? ["Democrats", pD] : ["Republicans", 1 - pD];
+  document.getElementById("h-headline").textContent =
+    `${leader[0]} win the House in ${Math.round(leader[1] * 100)} of 100 simulations`;
+  document.getElementById("h-lede").innerHTML =
+    `The median outcome is <strong>${c.median_seats.DEM} Democratic</strong> and <strong>${c.median_seats.REP} Republican</strong> seats. ` +
+    `Control takes ${HOUSE.assumptions.control_seats}. Every district starts from its 2024 presidential vote and moves with a national environment of <strong>${hShort(n.margin)}</strong>.`;
+  const envNote = n.source === "aggregates" ? n.label.toLowerCase() : n.source === "polls" ? "pollcast's own polling average" : "a placeholder set in the config";
+  document.getElementById("h-odds").innerHTML = [
+    { big: pct(pD), label: "Democrats win control", color: "var(--c3)" },
+    { big: pct(1 - pD), label: "Republicans keep control", color: "var(--r3)" },
+    { big: hShort(n.margin), label: `National environment, from ${envNote}`, color: "var(--faint)" },
+  ].map((o) => `<div class="odd"><div class="big num">${o.big}</div><div class="label"><span class="swatch" style="background:${o.color}"></span>${o.label}</div></div>`).join("");
+}
+
+function renderHouseHistogram() {
+  drawSeatHistogram("h-hist", HOUSE.control.dem_seats_hist, HOUSE.assumptions.control_seats, HOUSE.n_sims, {
+    noun: "Democratic seats", hintId: "h-hist-hint",
+    above: { color: "var(--c2)", label: "Democratic control", short: "D control", outcome: "Democrats control." },
+    below: { color: "var(--r2)", label: "Republican control", short: "R control", outcome: "Republicans control." },
+  });
+}
+
+function districtCard(d) {
+  const r = rating(d.p_dem);
+  const ch = d.challenger || "DEM";
+  const rows = [
+    { who: partyName[ch], p: d.p_dem, color: ch === "IND" ? "var(--c2)" : "var(--c3)" },
+    { who: "Republican", p: 1 - d.p_dem, color: "var(--r3)" },
+  ].sort((a, b) => b.p - a.p);
+  const chances = rows.map((o) =>
+    `<div class="chance"><span class="who">${o.who}</span><span class="pct">${pct(o.p)}</span>` +
+    `<span class="track"><span class="fill" style="display:block;width:${(o.p * 100).toFixed(1)}%;background:${o.color}"></span></span></div>`
+  ).join("");
+  const inc = d.incumbent ? `${d.incumbent} (${partyShort[d.incumbent_party] || "?"})` : "None";
+  const P = d.polls;
+  const pollFacts = P
+    ? `<dt>District polls (${P.n_polls})</dt><dd>${hShort(P.margin, ch)}</dd><dt>Lean model</dt><dd>${hShort(d.model, ch)}</dd>`
+    : "";
+  const pollTable = P && P.recent.length
+    ? `<table class="polls"><thead><tr><th>Recent polls</th><th class="n">${partyShort[ch]}</th><th class="n">R</th><th class="n">Ended</th></tr></thead><tbody>` +
+      P.recent.map((p) => `<tr><td class="who" title="${p.pollster}">${p.pollster}</td><td class="n">${fmtPct(p[ch])}</td><td class="n">${fmtPct(p.REP)}</td><td class="n">${fmtDate(p.end_date)}</td></tr>`).join("") +
+      `</tbody></table>`
+    : "";
+  const note = P
+    ? `Blends ${P.n_polls} nonpartisan district poll${P.n_polls === 1 ? "" : "s"} (${Math.round(P.weight * 100)}% weight) with the lean model: 2024 presidential vote shifted by the national environment (${hShort(HOUSE.national.margin)}).`
+    : `No recent nonpartisan district polls. Lean from the 2024 presidential vote, shifted by the national environment (${hShort(HOUSE.national.margin)}).`;
+  return `<h3><span>${d.id}</span><span class="rating" style="background:var(--${r.key});color:${hInk(d.p_dem)}">${hRatingText(d.p_dem, ch)}</span></h3>` +
+    `<div class="chances">${chances}</div>` +
+    `<dl class="facts"><dt>Expected margin</dt><dd>${hShort(d.expected, ch)}</dd>` +
+    `<dt>80% of simulations</dt><dd>${hShort(d.interval80[0], ch)} to ${hShort(d.interval80[1], ch)}</dd>` +
+    pollFacts +
+    `<dt>2024 president</dt><dd>Harris ${d.pres24[0]}, Trump ${d.pres24[1]}</dd>` +
+    `<dt>Incumbent</dt><dd style="font-family:var(--font-body)">${inc}</dd></dl>` +
+    pollTable + `<p class="note">${note}</p>`;
+}
+
+function renderHouseMap() {
+  const svg = d3.select("#h-map");
+  const s = 10, w = Math.sqrt(3) * s, pad = 6;
+  const { cols, rows } = HOUSE.grid;
+  const cx = (c, r) => pad + w / 2 + c * w + (r % 2 ? w / 2 : 0);
+  const cy = (r) => pad + s + r * 1.5 * s;
+  svg.attr("viewBox", `0 0 ${(cols + 0.5) * w + 2 * pad} ${(rows - 1) * 1.5 * s + 2 * s + 2 * pad}`);
+  // Corners of a pointy-top hex, clockwise from upper right.
+  const corner = (x, y, k) => [x + s * Math.cos((Math.PI / 180) * (60 * k - 30)), y + s * Math.sin((Math.PI / 180) * (60 * k - 30))];
+  const owner = new Map(HOUSE.districts.filter((d) => d.hex).map((d) => [d.hex.join(","), d]));
+  const pat = svg.append("defs").append("pattern").attr("id", "ind-hatch").attr("patternUnits", "userSpaceOnUse")
+    .attr("width", 4).attr("height", 4).attr("patternTransform", "rotate(45)");
+  pat.append("rect").attr("width", 1.4).attr("height", 4).attr("fill", "var(--ind-stripe)");
+  const g = svg.append("g");
+
+  for (const d of HOUSE.districts) {
+    if (!d.hex) continue;
+    const [c, r] = d.hex, x = cx(c, r), y = cy(r);
+    const pts = d3.range(6).map((k) => corner(x, y, k).map((v) => v.toFixed(2)).join(",")).join(" ");
+    const el = g.append("polygon").attr("class", "hex").attr("points", pts)
+      .attr("fill", `var(--${rating(d.p_dem).key})`)
+      .attr("tabindex", 0).attr("role", "button")
+      .attr("aria-label", `${d.id}: ${hRatingText(d.p_dem, d.challenger)}, ${partyName[d.challenger || "DEM"]} ${pct(d.p_dem)}`)
+      .on("pointermove", function (ev) { showCard("h:" + d.id, districtCard(d), this, ev.clientX, ev.clientY); })
+      .on("pointerleave", () => hideCard())
+      .on("click", function (ev) { ev.stopPropagation(); togglePinCard("h:" + d.id, districtCard(d), this, ev.clientX, ev.clientY); })
+      .on("focus", function () { const b = this.getBoundingClientRect(); showCard("h:" + d.id, districtCard(d), this, b.right, b.top); })
+      .on("blur", () => hideCard())
+      .on("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          const b = this.getBoundingClientRect();
+          togglePinCard("h:" + d.id, districtCard(d), this, b.right, b.top);
+        }
+      });
+    hexEls.set(d.id, el.node());
+    if (d.challenger === "IND") g.append("polygon").attr("points", pts).attr("fill", "url(#ind-hatch)").style("pointer-events", "none");
+  }
+
+  // State borders: draw each hex edge whose neighbor is another state or empty.
+  // Edge k runs corner k to k+1; its neighbor, for odd-row-right offset grids:
+  const nb = (c, r, k) => {
+    const o = r % 2;
+    return [[c + 1, r], [c + o, r + 1], [c - 1 + o, r + 1], [c - 1, r], [c - 1 + o, r - 1], [c + o, r - 1]][k];
+  };
+  const edges = [];
+  for (const d of HOUSE.districts) {
+    if (!d.hex) continue;
+    const [c, r] = d.hex, x = cx(c, r), y = cy(r);
+    for (let k = 0; k < 6; k++) {
+      const other = owner.get(nb(c, r, k).join(","));
+      if (!other || other.state !== d.state) edges.push([corner(x, y, k), corner(x, y, (k + 1) % 6)]);
+    }
+  }
+  g.append("path").attr("class", "border").attr("d", edges.map(([a, b]) => `M${a[0].toFixed(2)},${a[1].toFixed(2)}L${b[0].toFixed(2)},${b[1].toFixed(2)}`).join(""));
+
+  // State labels at each state's hex centroid, on states with room for one.
+  const byState = d3.group(HOUSE.districts.filter((d) => d.hex), (d) => d.state);
+  for (const [st, ds] of byState) {
+    if (ds.length < 3) continue;
+    const mx = d3.mean(ds, (d) => cx(d.hex[0], d.hex[1])), my = d3.mean(ds, (d) => cy(d.hex[1]));
+    g.append("text").attr("class", "st").attr("x", mx).attr("y", my).text(st);
+  }
+
+  const sw = (k) => `<span style="background:var(--${k})"></span>`;
+  document.getElementById("h-legend").innerHTML =
+    `<div class="ramp">${sw("r3")}${sw("r2")}${sw("r1")}${sw("tossup")}${sw("c1")}${sw("c2")}${sw("c3")}</div>` +
+    `<span>Republican ← Solid · Likely · Lean · Toss-up · Lean · Likely · Solid → Challenger</span>` +
+    `<span><span class="swatch" style="background:var(--c2);background-image:repeating-linear-gradient(45deg,var(--ind-stripe) 0 2px,transparent 2px 6px)"></span>Independent challenger</span>`;
+}
+
+function renderHouseTable() {
+  const q = document.getElementById("h-filter").value.trim().toLowerCase();
+  const competitive = document.getElementById("h-competitive").checked;
+  const rows = HOUSE.districts
+    .filter((d) => !competitive || (d.p_dem > 0.05 && d.p_dem < 0.95) || q)
+    .filter((d) => !q || d.id.toLowerCase().includes(q) || (d.incumbent || "").toLowerCase().includes(q))
+    .sort((a, b) => Math.abs(a.p_dem - 0.5) - Math.abs(b.p_dem - 0.5));
+  document.getElementById("h-count").textContent = `${rows.length} of ${HOUSE.districts.length} districts`;
+  const body = document.getElementById("h-rows");
+  body.innerHTML = rows.map((d) =>
+    `<tr data-id="${d.id}">` +
+    `<td><button class="state-btn" type="button">${d.id}</button></td>` +
+    `<td>${d.incumbent || "–"} <span style="color:var(--muted)">${d.incumbent_party ? "(" + partyShort[d.incumbent_party] + ")" : ""}</span></td>` +
+    `<td><div class="split" aria-hidden="true"><span style="width:${(d.p_dem * 100).toFixed(1)}%;background:var(--c3)"></span><span style="flex:1;background:var(--r3)"></span></div></td>` +
+    `<td class="n">${partyShort[d.challenger || "DEM"]} ${pct(d.p_dem)}</td>` +
+    `<td class="n">${hShort(d.expected, d.challenger)}</td>` +
+    `<td class="n">${hShort(d.interval80[0], d.challenger)} to ${hShort(d.interval80[1], d.challenger)}</td>` +
+    `<td class="n">${hShort(d.pres24_margin)}</td></tr>`
+  ).join("") || `<tr><td colspan="7" style="color:var(--muted)">No districts match “${q}”. Try a code like PA-07 or an incumbent's last name.</td></tr>`;
+  body.querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const d = districts.get(tr.dataset.id), b = tr.getBoundingClientRect();
+      togglePinCard("h:" + d.id, districtCard(d), hexEls.get(d.id), b.left + 160, b.top);
+    });
+  });
+}
+
+function renderHouseMethod() {
+  const a = HOUSE.assumptions, n = HOUSE.national;
+  const detail = n.details.length
+    ? ` (${n.details.map((x) => `${x.source} ${hShort(x.margin)}`).join(", ")})`
+    : "";
+  document.getElementById("h-method").innerHTML = `
+    <p>Each district's expected margin starts from how it voted for president in 2024, relative to the country (Harris lost nationally by ${Math.abs(a.lean_baseline_margin)} points). That lean is shifted by the national House environment, <strong>${hShort(n.margin)}</strong>: ${n.label.toLowerCase()}${detail}. Incumbents get ${a.incumbency_bonus} points toward their party.</p>
+    <p>Each of the <strong>${HOUSE.n_sims.toLocaleString()}</strong> simulations adds one <strong>national miss</strong> shared by all 435 districts (standard deviation ${a.national_sd} points) and a separate <strong>district miss</strong> (${a.district_sd} points), both fat-tailed (Student-t, ${a.t_df} degrees of freedom).</p>
+    <p>Where a district has its own nonpartisan polls, their time-weighted average is blended in, counting for more as polls accumulate (${a.district_poll_prior} polls weigh as much as the lean model). Where an independent is the Republican's main opponent (hatched), the race is independent versus Republican, and a win counts for neither party.</p>
+    <p><strong>Not yet in the model:</strong> candidate quality and retirements; the incumbency bonus applies even where the incumbent isn't running. Error sizes are uncalibrated assumptions until the backtests run.</p>
+    <p>Polls: The New York Times poll database. District results on 2026 lines: The Downballot. Hex layout generated by pollcast from state shapes; district hexes within a state run north to south and don't match real district locations.</p>`;
+}
+
+// ================= Tabs =================
+function showView(name) {
+  const house = name === "house" && HOUSE;
+  document.getElementById("view-senate").hidden = !!house;
+  document.getElementById("view-house").hidden = !house;
+  document.getElementById("tab-senate").setAttribute("aria-selected", String(!house));
+  document.getElementById("tab-house").setAttribute("aria-selected", String(!!house));
+  if (pinned) unpin(); else hideCard();
+  // Histograms size to their container, which is zero-width while hidden.
+  if (house) renderHouseHistogram(); else renderHistogram();
+}
+
+renderHeader();
+renderAdjustments();
+renderHistogram();
+renderMap();
+renderTable();
+renderMethod();
+if (HOUSE) {
+  renderHouseHeader();
+  renderHouseMap();
+  renderHouseTable();
+  renderHouseMethod();
+  document.getElementById("h-filter").addEventListener("input", renderHouseTable);
+  document.getElementById("h-competitive").addEventListener("change", renderHouseTable);
+} else {
+  document.getElementById("tabs").hidden = true;
+}
+document.getElementById("tab-senate").addEventListener("click", () => showView("senate"));
+document.getElementById("tab-house").addEventListener("click", () => showView("house"));
+// Arrow keys move between tabs, per the tablist pattern.
+document.getElementById("tabs").addEventListener("keydown", (ev) => {
+  if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+  const next = document.getElementById("tab-senate").getAttribute("aria-selected") === "true" ? "house" : "senate";
+  showView(next);
+  document.getElementById("tab-" + next).focus();
+});
+showView(location.hash === "#house" ? "house" : "senate");
+document.addEventListener("click", () => { if (pinned) unpin(); });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && pinned) unpin(); });
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => (document.getElementById("view-house").hidden ? renderHistogram() : renderHouseHistogram()), 150);
+});
+</script>
