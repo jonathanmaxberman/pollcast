@@ -252,7 +252,7 @@ def score_indicator(races: pd.DataFrame, indicator, config: Config, name: str | 
             adjusted.loc[g.index, "mean"] = applied["mean"]
             if "sd_override" in applied:
                 adjusted.loc[g.index, "sd_override"] = applied["sd_override"]
-            for col in (c for c in applied.columns if str(c).startswith("loading_")):
+            for col in (c for c in applied.columns if str(c).startswith("loading_") or c == "national_sd_override"):
                 adjusted.loc[g.index, col] = applied[col]
     treated = resimulate(adjusted, sizes, sim, seats_ind)
 

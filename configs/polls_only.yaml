@@ -110,6 +110,11 @@ average:
 # Failed and untested ideas stay enabled: false: they show on the page as
 # options, start on Off, and never switch on by themselves.
 indicators:
+  # Declared before testing: error sizes fit to past misses, by lead time and
+  # race type, improve held-out log loss in both backtests. Listed first so
+  # blends see the calibrated uncertainty.
+  calibrated_errors:
+    enabled: false
   undecided_stretch:
     enabled: false   # failed its backtest
     prior_sd: 0.1   # shrinkage toward no effect (k = 1)
@@ -176,6 +181,15 @@ indicators:
     enabled: true    # default: best held-out combination (both backtests)
     ridge: 1.0
     lead_aware: true
+  # Declared before testing (all three): see pollcast/indicators/polls_shape.py.
+  undecided_allocation:
+    enabled: false
+  late_momentum:
+    enabled: false
+    prior_sd: 0.5
+  midterm_penalty:
+    enabled: false
+    prior_sd: 1.0
   # Not testable until there is coverage history (archive began 2026-11-03).
   news_inflation:
     module: news_coverage
@@ -206,6 +220,12 @@ simulate:
   # 0.1928 -> 0.1871, but add nothing on top of fundamentals (0.1463 vs 0.1451).
   # Off until you turn it on; partisan_weight 0 keeps partisan polls out.
   house_effects: {enabled: false, partisan_weight: 0.0, prior_polls: 3.0, half_life_days: 45.0}
+  # Registered-voter gap: shift RV and adult polls by the cycle's measured
+  # RV-minus-LV gap from polls asking both. Passed alone on 2018-2024 (0.1927
+  # -> 0.1908, 4 of 4) but adds nothing on top of the live default, so off.
+  population_gap: {enabled: false, prior_pairs: 10}
+  # Weight polls by pollster accuracy (538 history). Failed (2018-2024 1 of 4).
+  accuracy_weights: {enabled: false, scale: 2.0}
   # The NYT files record Nebraska's independent Dan Osborn as a Democrat.
   party_overrides:
     Nebraska: {Dan Osborn: IND}

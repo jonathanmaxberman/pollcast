@@ -48,6 +48,10 @@ def load_history(config: Config) -> pd.DataFrame:
     return raw
 
 
+def _two_party(polls: pd.DataFrame) -> pd.DataFrame:
+    return _margins(polls).assign(margin=(polls["cand1_pct"] + polls["cand2_pct"]).astype(float).to_numpy())
+
+
 def _margins(polls: pd.DataFrame) -> pd.DataFrame:
     """The poll_margins shape the averaging code expects."""
     return pd.DataFrame({
@@ -61,7 +65,7 @@ def _margins(polls: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def eve_races(config: Config, *, house_effects: dict | None = None,
+def eve_races(config: Config, *, house_effects: dict | None = None, accuracy: dict | None = None,
               race_types: tuple = ("senate", "governor", "president", "house")) -> pd.DataFrame:
     """One row per race: the election-eve forecast inputs and what happened.
 
@@ -85,6 +89,11 @@ def eve_races(config: Config, *, house_effects: dict | None = None,
         eday = election_day(int(year))
         as_of = eday - timedelta(days=1)
         m = _margins(g[g["partisan"].isna() | (g["partisan"] == "")])
+        if accuracy:
+            mult = accuracy.get(int(year), {})
+            w = np.array([mult.get(k, 1.0) for k in m["pollster_rating_id"]], dtype=float)
+            # The average weights polls by sqrt(sample size): scale n by the square.
+            m["sample_size"] = m["sample_size"].fillna(cfg.reference_sample_size).to_numpy(dtype=float) * w**2
         if house_effects:
             bias = house_effects.get(int(year), {})
             lean = np.array([bias.get(k, 0.0) for k in m["pollster_rating_id"]], dtype=float)
@@ -94,12 +103,19 @@ def eve_races(config: Config, *, house_effects: dict | None = None,
             continue
         last = avg.iloc[-1]
         n_eff, se = float(last["effective_n"]), (0.0 if np.isnan(last["se"]) else float(last["se"]))
+        nonpartisan = g[g["partisan"].isna() | (g["partisan"] == "")]
+        tp = time_weighted_average(_two_party(nonpartisan), cfg, start=as_of, end=as_of)
+        # The file only has the final 21 days, so the trend looks back 10 days, not 14.
+        early = as_of - timedelta(days=10)
+        before = time_weighted_average(m, cfg, start=early, end=early) if len(m) else m
         state = STATE_NAMES.get(loc[:2], loc) if rt != "house" else loc
         actual_margin = float(g["margin_actual"].iloc[0])
         rows.append({
             "cycle": int(year), "race": race, "race_type": rt, "state": state, "special": bool(g["special"].iloc[0]),
             "as_of": as_of, "lead_days": 0, "basis": "polls", "challenger": "DEM",
             "mean": float(last["margin"]), "se": se, "effective_n": n_eff, "n_polls": int(last["n_polls"]),
+            "two_party": float(tp["margin"].iloc[-1]) if len(tp) else np.nan,
+            "trend14": float(last["margin"] - before["margin"].iloc[-1]) if len(before) else np.nan,
             "sd": float(np.sqrt(sim.state_sd**2 + se**2 + sim.few_polls_sd**2 / max(n_eff, 1))),
             "margin": actual_margin, "actual": int(actual_margin > 0),
         })
@@ -163,7 +179,8 @@ def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
         # Only modules whose data reach back before 2018 at election eve.
         if module not in ("undecided_stretch", "senate_fundamentals", "education_shift",
                           "education_correlation", "education_swing", "election_day_rain",
-                          "economy_vs_president"):
+                          "economy_vs_president", "calibrated_errors", "undecided_allocation",
+                          "late_momentum", "midterm_penalty"):
             continue
         ind = INDICATORS[settings.get("module", name)](settings)
         ind.prepare(config)

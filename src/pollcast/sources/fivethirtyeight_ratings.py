@@ -89,3 +89,31 @@ def historical_bias(history: pd.DataFrame, before_year: int, *, max_days_out: in
         if m.any():
             out[f"*|{party}"] = float(wb[m].sum() / (w[m].sum() + prior_polls))
     return out
+
+
+def historical_accuracy(history: pd.DataFrame, before_year: int, *, max_days_out: int = 21,
+                        prior_polls: float = 10.0) -> dict[str, float]:
+    """Each pollster's past error size relative to other polls of the same races.
+
+    A poll's relative error is its absolute miss minus the mean absolute miss
+    of every poll of that race, so hard races don't count against anyone.
+    Positive = less accurate than peers. Shrunk toward zero as if each
+    pollster had `prior_polls` extra average polls. Elections before
+    `before_year` only.
+    """
+    h = history[(history["year"] < before_year) & (history["days_out"] <= max_days_out)
+                & (history["days_out"] >= 0)]
+    if h.empty:
+        return {}
+    err = h["bias"].abs()
+    rel = err - err.groupby(h["race"]).transform("mean")
+    g = rel.groupby(h["pollster_rating_id"])
+    return (g.sum() / (g.count() + prior_polls)).to_dict()
+
+
+def accuracy_multipliers(accuracy: dict[str, float], scale: float = 2.0,
+                         low: float = 0.5, high: float = 2.0) -> dict[str, float]:
+    """Poll weight multipliers: exp(-relative error / scale), clipped to [low, high]."""
+    import math
+
+    return {k: min(max(math.exp(-v / scale), low), high) for k, v in accuracy.items()}

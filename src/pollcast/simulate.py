@@ -51,6 +51,11 @@ class SimulateConfig:
     rep_control_seats: int = 50
     # Pollster and partisan-sponsor house effects (see HouseEffects).
     house_effects: dict = field(default_factory=dict)
+    # Shift registered-voter and adult polls by the cycle's measured gap from
+    # likely-voter versions of the same polls: {enabled, prior_pairs}.
+    population_gap: dict = field(default_factory=dict)
+    # Weight polls by each pollster's past accuracy (538 history): {enabled, scale}.
+    accuracy_weights: dict = field(default_factory=dict)
     # Settings passed through to the per-state polling average.
     average: dict = field(default_factory=lambda: {"half_life_days": 21, "max_age_days": 365})
     # Fix a candidate's party where a source records it differently from how
@@ -129,6 +134,28 @@ def estimate_house_effects(race_margins: dict, averages: dict, he: HouseEffects,
     for party, d in r[r["sponsor"] != ""].groupby("sponsor"):
         effects[f"*|{party}"] = float((d["w"] * d["resid"]).sum() / (d["w"].sum() + he.prior_polls))
     return effects
+
+
+def population_gap(polls: pd.DataFrame, prior_pairs: float = 10.0) -> float:
+    """Mean (registered-voter minus likely-voter) D-R margin within the same polls.
+
+    Uses every nonpartisan general-election poll released so far this cycle
+    that asked both versions of a question, shrunk toward zero as if there
+    were `prior_pairs` extra pairs with no gap.
+    """
+    p = polls[(polls["party"].isin(["DEM", "REP"])) & (polls["partisan"].fillna("") == "")
+              & (polls["stage"].fillna("general").isin(["general", ""]))
+              & (polls["population"].isin(["lv", "rv"]))]
+    if p.empty:
+        return 0.0
+    q = p.pivot_table(index=["source", "poll_id", "question_id", "population"], columns="party",
+                      values="pct", aggfunc="max").dropna()
+    q["margin"] = q["DEM"] - q["REP"]
+    by_pop = q.groupby(level=["source", "poll_id", "population"])["margin"].mean().unstack()
+    if "lv" not in by_pop or "rv" not in by_pop:
+        return 0.0
+    diff = (by_pop["rv"] - by_pop["lv"]).dropna()
+    return float(diff.sum() / (len(diff) + prior_pairs))
 
 
 def _t_draws(rng: np.random.Generator, df: float, sd: float, size) -> np.ndarray:
@@ -220,11 +247,33 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
                                          prior_polls=he.history_prior_polls)
         effects = estimate_house_effects(race_margins, averages, he, as_of, prior)
 
+    gap = None
+    if (sim.population_gap or {}).get("enabled"):
+        gap = population_gap(cycle_polls, float(sim.population_gap.get("prior_pairs", 10.0)))
+    acc = sim.accuracy_weights or {}
+    multipliers = {}
+    if acc.get("enabled"):
+        snap = latest_snapshot(config.data_dir, "fivethirtyeight_ratings")
+        if snap is not None:
+            from pollcast.sources import SOURCES
+            from pollcast.sources.fivethirtyeight_ratings import accuracy_multipliers, historical_accuracy
+
+            hist = SOURCES["fivethirtyeight_ratings"](config).normalize(snap)
+            multipliers = accuracy_multipliers(historical_accuracy(hist, sim.cycle), scale=float(acc.get("scale", 2.0)))
+
     rows = []
     for state, special in races:
         race_polls = polls[(polls["state"] == state) & (polls["special"] == special)]
         cfg = replace(base_avg, state=state)
         challenger, margins = main_challenger(race_polls, cfg)
+        if gap is not None and len(margins):
+            # Margins are challenger minus Republican; the gap is measured D minus R.
+            sign = 1.0 if challenger == "DEM" else 0.0
+            rv = margins["population"].isin(["rv", "a", "v"]).to_numpy()
+            margins = margins.assign(margin=margins["margin"] - sign * gap * rv)
+        if multipliers and len(margins):
+            w = np.array([multipliers.get(str(k), 1.0) for k in margins["pollster_rating_id"]], dtype=float)
+            margins = margins.assign(sample_size=margins["sample_size"].fillna(cfg.reference_sample_size) * w**2)
         if he.enabled:
             margins = poll_margins(race_polls, replace(cfg, exclude_partisan=False), challenger=challenger)
             if len(margins):
@@ -244,7 +293,15 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
             last = current.iloc[-1]
             n_eff = float(last["effective_n"])
             se = 0.0 if np.isnan(last["se"]) else float(last["se"])
+            # Extra features for adjustments: the average Democratic + Republican share,
+            # and how far the average moved over the previous 14 days.
+            tp = time_weighted_average(margins.assign(margin=margins[challenger] + margins["REP"]),
+                                       cfg, start=as_of, end=as_of)
+            before = time_weighted_average(margins, cfg, start=pd.Timestamp(as_of) - pd.Timedelta(days=14),
+                                           end=pd.Timestamp(as_of) - pd.Timedelta(days=14))
             row |= {
+                "two_party": float(tp["margin"].iloc[-1]) if len(tp) else np.nan,
+                "trend14": float(last["margin"] - before["margin"].iloc[-1]) if len(before) else np.nan,
                 "basis": "polls",
                 "mean": float(last["margin"]),
                 "se": se,
@@ -294,7 +351,11 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
 def simulate(inputs: pd.DataFrame, sim: SimulateConfig) -> dict:
     rng = np.random.default_rng(sim.seed)
     n, k = sim.n_sims, len(inputs)
-    national = _t_draws(rng, sim.t_df, sim.national_sd, (n, 1))
+    # An indicator can replace the national error size (e.g. one calibrated by lead time).
+    national_sd = sim.national_sd
+    if "national_sd_override" in inputs and inputs["national_sd_override"].notna().any():
+        national_sd = float(inputs["national_sd_override"].dropna().iloc[0])
+    national = _t_draws(rng, sim.t_df, national_sd, (n, 1))
     local = _t_draws(rng, sim.t_df, 1.0, (n, k)) * inputs["sd"].to_numpy()
     margins = inputs["mean"].to_numpy() + national + local
     # Extra shared error factors an indicator adds (columns named loading_*): one

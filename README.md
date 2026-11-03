@@ -102,7 +102,16 @@ Census-based adjustments). Results from the run on 2026-11-03:
 | Election-day rain (relative to the cycle's average) | 0.2568 -> 0.2570 | 7 of 13 (fails; helped Republicans in 8 cycles but flipped in 2004-08 and every cycle since 2018) |
 | Consumer sentiment against the president's party | 0.2568 -> 0.2602 | 4 of 13 (fails) |
 | Gas prices against the president's party | 0.2568 -> 0.2577 | 4 of 13 (fails) |
+| Error sizes calibrated by lead time and race type | 0.2568 -> 0.2553 | 8 of 13 (fails 2018-2024: 0 of 4) |
+| Undecided voters split race by race (theta) | 0.2568 -> 0.2568 | 8 of 13 (fails; no better than the 30-day stretch) |
+| Late momentum | 0.2568 -> 0.2568 | 8 of 13 (fails; late movement partly reverses, mu = -0.22) |
+| Midterm penalty for the president's party | 0.2568 -> 0.2574 | 2 of 13 (fails; polls already capture it) |
+| Pollster accuracy weights | 0.2568 -> 0.2563 | 7 of 13 (fails 2018-2024: 1 of 4) |
 | **Live default: undecided + lead-aware blend** | **0.2568 -> 0.2545** | **10 of 13** |
+
+Registered-vs-likely voter gap (measured within each cycle's polls) can only
+be tested on 2018-2024: it passes alone (0.1927 -> 0.1908, 4 of 4) but adds
+nothing on top of the live default (0.1405 vs 0.1403), so it is off.
 
 An adjustment counts as passed only if it passes both the 2018-2024 replays
 and, where its data reach back, this 1998-2022 test.
