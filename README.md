@@ -8,6 +8,10 @@ and scores extra indicators out of sample.
 Everything is driven by a YAML config, so you can change sources,
 assumptions and indicators without touching model code.
 
+**2026 midterm forecast**, published on election day before results:
+[interactive page](https://jonathanmaxberman.github.io/pollcast/predictions/2026-11-03/forecast.html) ·
+[numbers for every race](predictions/2026-11-03/PREDICTION.md).
+
 **Status: early.** Working today: snapshot storage, poll ingest from four
 sources into one normalized table, a daily GDELT news archive, a simple
 time-weighted average, and a Monte Carlo Senate forecast with an interactive
