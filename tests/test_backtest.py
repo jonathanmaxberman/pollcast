@@ -57,3 +57,15 @@ def test_historical_leans_are_relative_to_peers_and_exclude_later_years():
     lean = historical_leans(hist, 2018, prior_polls=0.0)
     assert lean["X"] == pytest.approx(1.0) and lean["Y"] == pytest.approx(-1.0)  # the shared miss is removed
     assert historical_leans(hist, 2016) == {}  # nothing before 2016
+
+
+def test_historical_bias_is_against_results_and_covers_sponsors():
+    from pollcast.sources.fivethirtyeight_ratings import historical_bias
+
+    hist = pd.DataFrame({
+        "year": [2016, 2016, 2016], "race": ["a", "a", "a"], "pollster_rating_id": ["X", "Y", "Z"],
+        "partisan": ["", "", "R"], "days_out": [5, 5, 5], "bias": [6.0, 4.0, -2.0],
+    })
+    b = historical_bias(hist, 2018, prior_polls=0.0)
+    assert b["X"] == pytest.approx(6.0) and b["Y"] == pytest.approx(4.0)  # the shared miss is kept
+    assert b["*|REP"] == pytest.approx(-2.0) and "*|DEM" not in b

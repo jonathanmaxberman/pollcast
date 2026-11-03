@@ -189,6 +189,8 @@ simulate:
   # nonpartisan polls only passed as a post-hoc split (0.1928 -> 0.1912, 3/4).
   # Pooling leans across race types with 538 history priors (pooled: true,
   # history: true) failed too: 0.1934 nonpartisan, 0.2001 with partisan polls.
+  # Post hoc: leans against past RESULTS (anchor: results) passed, nonpartisan
+  # 0.1928 -> 0.1871, but add nothing on top of fundamentals (0.1463 vs 0.1451).
   # Off until you turn it on; partisan_weight 0 keeps partisan polls out.
   house_effects: {enabled: false, partisan_weight: 0.0, prior_polls: 3.0, half_life_days: 45.0}
   # The NYT files record Nebraska's independent Dan Osborn as a Democrat.

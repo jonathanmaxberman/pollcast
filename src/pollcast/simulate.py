@@ -84,6 +84,11 @@ class HouseEffects:
     history: bool = False
     history_prior_polls: float = 5.0
     history_days_out: int = 21
+    # "consensus": leans vs other polls of the same race (538's approach).
+    # "results": each pollster's past lean against actual results only, no
+    # in-cycle residuals, so a pollster that was right isn't pulled toward a miss.
+    anchor: str = "consensus"
+    history_half_life_years: float = 8.0
 
 
 def _pollster_key(rating_id, pollster) -> str:
@@ -162,7 +167,21 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
     races = sorted(r for r in races if r[0])
     he = HouseEffects(**sim.house_effects)
     effects = {}
-    if he.enabled:
+    if he.enabled and he.anchor == "results":
+        snap = latest_snapshot(config.data_dir, "fivethirtyeight_ratings")
+        if snap is not None:
+            from pollcast.sources import SOURCES
+            from pollcast.sources.fivethirtyeight_ratings import historical_bias
+
+            bias = historical_bias(SOURCES["fivethirtyeight_ratings"](config).normalize(snap), sim.cycle,
+                                   max_days_out=he.history_days_out, prior_polls=he.history_prior_polls,
+                                   half_life_years=he.history_half_life_years)
+            # The same pollster lean applies whoever sponsors the poll; sponsor-party
+            # leans cover partisan polls from pollsters with no history.
+            effects = {f"{k}|{sp}": v for k, v in bias.items() if not k.startswith("*")
+                       for sp in ("", "DEM", "REP", "IND")}
+            effects |= {k: v for k, v in bias.items() if k.startswith("*")}
+    elif he.enabled:
         # First pass: each race's nonpartisan average, and all its polls, partisan included.
         race_margins, averages = {}, {}
         for state, special in races:

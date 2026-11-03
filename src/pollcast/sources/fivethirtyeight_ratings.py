@@ -63,3 +63,29 @@ def historical_leans(history: pd.DataFrame, before_year: int, *, max_days_out: i
     rel = h["bias"] - h.groupby("race")["bias"].transform("mean")
     g = rel.groupby(h["pollster_rating_id"])
     return (g.sum() / (g.count() + prior_polls)).to_dict()
+
+
+def historical_bias(history: pd.DataFrame, before_year: int, *, max_days_out: int = 21,
+                    prior_polls: float = 5.0, half_life_years: float = 8.0) -> dict[str, float]:
+    """Each pollster's past lean against actual results (not against other pollsters).
+
+    Only elections before `before_year`, polls within `max_days_out` of election
+    day, recent elections weighted more (`half_life_years`). Positive means the
+    pollster's polls ran more Democratic than the result. Each pollster's mean
+    is shrunk toward zero as if it had `prior_polls` extra polls with no lean.
+    Also returns "*|DEM" and "*|REP": the same for all polls sponsored by each
+    party, a fallback for partisan polls from pollsters with no history.
+    """
+    h = history[(history["year"] < before_year) & (history["days_out"] <= max_days_out)
+                & (history["days_out"] >= 0)]
+    if h.empty:
+        return {}
+    w = 0.5 ** ((before_year - h["year"]) / half_life_years)
+    wb = w * h["bias"]
+    out = (wb.groupby(h["pollster_rating_id"]).sum()
+           / (w.groupby(h["pollster_rating_id"]).sum() + prior_polls)).to_dict()
+    for code, party in (("D", "DEM"), ("R", "REP")):
+        m = h["partisan"] == code
+        if m.any():
+            out[f"*|{party}"] = float(wb[m].sum() / (w[m].sum() + prior_polls))
+    return out
