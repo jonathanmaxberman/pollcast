@@ -43,3 +43,17 @@ def test_error_sizes_recover_a_known_national_miss():
     sizes = estimate_error_sizes(pd.DataFrame(rows), ErrorSizes(1, 1, 1, 1))
     assert sizes.national_sd == pytest.approx(4.0, abs=0.6)
     assert sizes.state_sd == pytest.approx(3.0, abs=0.6)
+
+
+def test_historical_leans_are_relative_to_peers_and_exclude_later_years():
+    from pollcast.sources.fivethirtyeight_ratings import historical_leans
+
+    hist = pd.DataFrame({
+        "year": [2016, 2016, 2016, 2016, 2020], "race": ["a", "a", "b", "b", "c"],
+        "pollster_rating_id": ["X", "Y", "X", "Y", "X"], "days_out": [5, 5, 5, 5, 5],
+        # Every poll missed toward Democrats; X by 2 points more than Y.
+        "bias": [6.0, 4.0, 6.0, 4.0, -20.0],
+    })
+    lean = historical_leans(hist, 2018, prior_polls=0.0)
+    assert lean["X"] == pytest.approx(1.0) and lean["Y"] == pytest.approx(-1.0)  # the shared miss is removed
+    assert historical_leans(hist, 2016) == {}  # nothing before 2016

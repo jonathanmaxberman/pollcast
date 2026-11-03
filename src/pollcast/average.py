@@ -62,7 +62,7 @@ def poll_margins(polls: pd.DataFrame, cfg: AverageConfig, challenger: str = "DEM
     meta = p.drop_duplicates(["source", "poll_id", "question_id"]).set_index(
         ["source", "poll_id", "question_id"]
     )[["pollster", "state", "start_date", "end_date", "release_date", "sample_size",
-       "population", "partisan"]]
+       "population", "partisan", "pollster_rating_id"]]
     q = by_question[["margin", *PARTIES]].join(meta).reset_index()
 
     rank = {pop: i for i, pop in enumerate(cfg.population_preference)}
@@ -79,6 +79,7 @@ def poll_margins(polls: pd.DataFrame, cfg: AverageConfig, challenger: str = "DEM
         sample_size=("sample_size", "max"),
         population=("population", "first"),
         partisan=("partisan", "first"),
+        pollster_rating_id=("pollster_rating_id", "first"),
         margin=("margin", "mean"),
         **{party: (party, "mean") for party in PARTIES},
     )

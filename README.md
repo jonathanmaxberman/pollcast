@@ -101,6 +101,7 @@ switching is instant and only passes grow the number of combinations.
 | `education_shift` | Post hoc (after seeing education slopes): challengers run behind their polls in high non-college-white states | Passed: 0.1927 -> 0.1803, better in 4 of 4; mostly overlaps `senate_fundamentals` (both together 0.1439 vs 0.1451) |
 | house effects, partisan polls included (`simulate.house_effects`, `partisan_weight: 1`) | Adjusting pollster and sponsor leans and keeping partisan polls helps | Failed: 0.1928 -> 0.1977, better in 1 of 4 (worst in 2020, 2022) |
 | house effects, nonpartisan polls only (`partisan_weight: 0`) | Post hoc split of the above | Passed: 0.1928 -> 0.1912, better in 3 of 4 |
+| house effects pooled across race types, with 538 history priors (`pooled`, `history`) | More data per pollster sharpens the leans and helps | Failed both ways: nonpartisan only 0.1928 -> 0.1934 (2 of 4); partisan included 0.1928 -> 0.2001 (0 of 4). Helps 2022, hurts 2020 and 2024, when Republican-leaning pollsters were closest |
 | `news_inflation` | Declared when built | Not testable: coverage archive began 2026-11-03 |
 
 The House backtest needs MIT's House results, which Dataverse serves only

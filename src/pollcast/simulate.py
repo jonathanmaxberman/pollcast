@@ -76,29 +76,50 @@ class HouseEffects:
     prior_polls: float = 3.0
     half_life_days: float = 45.0
     partisan_weight: float = 1.0
+    # Pooled: estimate leans from every race type polled this cycle, not just this one.
+    pooled: bool = False
+    race_types: list = field(default_factory=lambda: ["generic", "senate", "governor", "president", "house"])
+    # History: shrink each pollster toward its lean in earlier elections (538's
+    # raw-polls data), measured relative to other pollsters in the same races.
+    history: bool = False
+    history_prior_polls: float = 5.0
+    history_days_out: int = 21
 
 
-def _group(pollster, partisan) -> str:
-    return f"{pollster}|{partisan or ''}"
+def _pollster_key(rating_id, pollster) -> str:
+    rating_id = "" if rating_id is None or pd.isna(rating_id) else str(rating_id).strip()
+    return rating_id if rating_id and rating_id != "<NA>" else f"name:{pollster}"
 
 
-def estimate_house_effects(race_margins: dict, averages: dict, he: HouseEffects, as_of: date) -> dict:
-    """{group: effect} from residuals against each race's nonpartisan average."""
+def _group(pollster_key, partisan) -> str:
+    return f"{pollster_key}|{partisan or ''}"
+
+
+def estimate_house_effects(race_margins: dict, averages: dict, he: HouseEffects, as_of: date,
+                           prior: dict | None = None) -> dict:
+    """{group: effect} from residuals against each race's nonpartisan average.
+
+    `prior` maps a pollster key to a historical lean; each pollster's estimate
+    is shrunk toward it (weight `prior_polls`) instead of toward zero.
+    """
+    prior = prior or {}
     rows = []
     for race, m in race_margins.items():
         if race not in averages or m.empty:
             continue
         age = (pd.Timestamp(as_of) - m["midpoint"]).dt.days.clip(lower=0)
-        rows.append(pd.DataFrame({"group": [_group(p, s) for p, s in zip(m["pollster"], m["partisan"].fillna(""))],
+        keys = [_pollster_key(i, p) for i, p in zip(m["pollster_rating_id"], m["pollster"])]
+        rows.append(pd.DataFrame({"key": keys, "group": [_group(k, s) for k, s in zip(keys, m["partisan"].fillna(""))],
                                   "sponsor": m["partisan"].fillna(""),
                                   "resid": m["margin"] - averages[race],
                                   "w": 0.5 ** (age / he.half_life_days)}))
+    effects = {f"{k}|": v for k, v in prior.items()}  # pollsters seen only in history
     if not rows:
-        return {}
+        return effects
     r = pd.concat(rows)
-    effects = {}
     for g, d in r.groupby("group"):
-        effects[g] = float((d["w"] * d["resid"]).sum() / (d["w"].sum() + he.prior_polls))
+        p = prior.get(d["key"].iloc[0], 0.0) if d["sponsor"].iloc[0] == "" else 0.0
+        effects[g] = float(((d["w"] * d["resid"]).sum() + he.prior_polls * p) / (d["w"].sum() + he.prior_polls))
     # Sponsor-party fallback for partisan groups never seen against an average.
     for party, d in r[r["sponsor"] != ""].groupby("sponsor"):
         effects[f"*|{party}"] = float((d["w"] * d["resid"]).sum() / (d["w"].sum() + he.prior_polls))
@@ -123,8 +144,8 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
     """
     if polls is None:
         polls = build_polls(config, as_of=as_of)
-    polls = polls[(polls["race_type"] == sim.race_type) & (polls["cycle"] == sim.cycle)
-                  & (polls["release_date"].dt.normalize() <= pd.Timestamp(as_of))].copy()
+    cycle_polls = polls[(polls["cycle"] == sim.cycle) & (polls["release_date"].dt.normalize() <= pd.Timestamp(as_of))]
+    polls = cycle_polls[cycle_polls["race_type"] == sim.race_type].copy()
     polls["special"] = [is_special_senate(sim.cycle, n) for n in polls["seat_name"].fillna("")]
     if priors is None:
         snap = latest_snapshot(config.data_dir, "electoral_vote", as_of)
@@ -153,7 +174,32 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
                 averages[(state, special)] = float(avg["margin"].iloc[-1])
             race_margins[(state, special)] = poll_margins(race_polls, replace(cfg, exclude_partisan=False),
                                                           challenger=challenger)
-        effects = estimate_house_effects(race_margins, averages, he, as_of)
+        if he.pooled:
+            # Every other race polled this cycle: generic ballot, governor, president, House...
+            other = cycle_polls[cycle_polls["race_type"].isin([t for t in he.race_types if t != sim.race_type])
+                                & (cycle_polls["source"].isin(["nyt", "fivethirtyeight_archive", "fiftyplusone"]))]
+            keys = ["race_type", "state", "district", "seat_name"]
+            for key, race_polls in other.groupby([other[k].fillna("") for k in keys]):
+                cfg = replace(base_avg, race_type=key[0], state=None)
+                nonpartisan = poll_margins(race_polls, cfg)  # Democrat vs Republican
+                if nonpartisan.empty:
+                    continue
+                avg = time_weighted_average(nonpartisan, cfg, start=as_of, end=as_of)
+                if avg.empty:
+                    continue
+                averages[key] = float(avg["margin"].iloc[-1])
+                race_margins[key] = poll_margins(race_polls, replace(cfg, exclude_partisan=False))
+        prior = {}
+        if he.history:
+            snap = latest_snapshot(config.data_dir, "fivethirtyeight_ratings")
+            if snap is not None:
+                from pollcast.sources import SOURCES
+                from pollcast.sources.fivethirtyeight_ratings import historical_leans
+
+                hist = SOURCES["fivethirtyeight_ratings"](config).normalize(snap)
+                prior = historical_leans(hist, sim.cycle, max_days_out=he.history_days_out,
+                                         prior_polls=he.history_prior_polls)
+        effects = estimate_house_effects(race_margins, averages, he, as_of, prior)
 
     rows = []
     for state, special in races:
@@ -164,8 +210,9 @@ def state_inputs(config: Config, sim: SimulateConfig, as_of: date, *,
             margins = poll_margins(race_polls, replace(cfg, exclude_partisan=False), challenger=challenger)
             if len(margins):
                 sponsor = margins["partisan"].fillna("")
-                shift = [effects.get(_group(p, s), effects.get(f"*|{s}", 0.0) if s else 0.0)
-                         for p, s in zip(margins["pollster"], sponsor)]
+                keys = [_pollster_key(i, p) for i, p in zip(margins["pollster_rating_id"], margins["pollster"])]
+                shift = [effects.get(_group(k, s), effects.get(f"*|{s}", 0.0) if s else 0.0)
+                         for k, s in zip(keys, sponsor)]
                 margins = margins.assign(margin=margins["margin"] - np.array(shift),
                                          sample_size=np.where(sponsor != "", margins["sample_size"].fillna(
                                              cfg.reference_sample_size) * he.partisan_weight**2, margins["sample_size"]))

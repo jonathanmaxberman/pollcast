@@ -15,6 +15,7 @@ POLL_COLUMNS: dict[str, str] = {
     "question_id": "string",
     "pollster": "string",
     "pollster_id": "string",
+    "pollster_rating_id": "string",  # 538's ID, shared by its archive, the NYT and its ratings
     "sponsors": "string",
     "race_type": "string",  # generic | senate | governor | house | president | approval
     "cycle": "Int64",

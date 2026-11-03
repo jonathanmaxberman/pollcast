@@ -97,6 +97,7 @@ def parse_538_csv(path, *, source: str, default_race_type: str) -> pd.DataFrame:
             "question_id": col("question_id"),
             "pollster": col("pollster"),
             "pollster_id": col("pollster_id"),
+            "pollster_rating_id": col("pollster_rating_id"),
             "sponsors": col("sponsors"),
             "race_type": [
                 race_type_for(o, s, default_race_type, st)

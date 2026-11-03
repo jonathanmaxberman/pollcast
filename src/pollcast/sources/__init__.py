@@ -8,6 +8,7 @@ from pollcast.sources.downballot import DownballotDistricts
 from pollcast.sources.electoral_vote import ElectoralVote
 from pollcast.sources.fiftyplusone import FiftyPlusOne
 from pollcast.sources.fivethirtyeight import FiveThirtyEightArchive
+from pollcast.sources.fivethirtyeight_ratings import FiveThirtyEightRatings
 from pollcast.sources.gdelt import GDELT
 from pollcast.sources.google_trends import GoogleTrends
 from pollcast.sources.mit import MITResults
@@ -17,7 +18,7 @@ from pollcast.sources.nyt import NYTimes
 SOURCES: dict[str, type[Source]] = {
     cls.name: cls for cls in (FiveThirtyEightArchive, FiftyPlusOne, NYTimes, ElectoralVote, GDELT,
                  DownballotDistricts, AggregateAverages, MITResults,
-                 NOAAWeather, ALFRED, GoogleTrends, CensusACS)
+                 NOAAWeather, ALFRED, GoogleTrends, CensusACS, FiveThirtyEightRatings)
 }
 
 __all__ = ["SOURCES", "Source"]
