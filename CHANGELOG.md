@@ -6,9 +6,9 @@ First public version, used for the 2026 midterm forecast published on
 November 3, 2026, before results.
 
 - **Election night:** `pollcast night` writes a page where called races
-  (and margins, if known) reweight one joint simulation of every Senate,
-  governor and House race, so each result updates the rest through the
-  shared polling error.
+  (and margins, if known) update the shared national polling error, and
+  through it every Senate, governor and House race still out (exact on a
+  grid of national errors, so any number of results stays smooth).
 - **Data:** 15 sources fetched into dated, never-overwritten snapshots: NYT
   and 538 polls, Electoral-vote.com, FiftyPlusOne, MIT results, The
   Downballot, 538's pollster-ratings history, GDELT, NOAA, ALFRED, Census,

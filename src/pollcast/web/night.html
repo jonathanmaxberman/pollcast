@@ -55,7 +55,7 @@ td.n, th.n { text-align: right; font-family: var(--font-data); font-variant-nume
 .race { font-weight: 600; }
 .kind { font-size: 12px; color: var(--muted); font-weight: 400; }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-.seg button { font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--fg); padding: 5px 10px; cursor: pointer; border-right: 1px solid var(--rule); }
+.seg button { font: inherit; font-size: 12px; white-space: nowrap; border: 0; background: transparent; color: var(--fg); padding: 5px 10px; cursor: pointer; border-right: 1px solid var(--rule); }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"].dem { background: var(--c3); color: #fff; }
 .seg button[aria-pressed="true"].rep { background: var(--r3); color: #fff; }
@@ -105,12 +105,13 @@ input.margin:disabled { opacity: 0.4; }
 <script>
 const NIGHT = /*__NIGHT__*/null;
 
-const n = NIGHT.n_sims;
-const decode16 = (b64, Type) => { const bin = atob(b64); const u8 = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Type(u8.buffer); };
-const M = decode16(NIGHT.margins, Int16Array);          // race-major, x10
-const HOUSE = decode16(NIGHT.house_dem_seats, Uint16Array);
-const NAT = decode16(NIGHT.national, Int16Array);       // x100, points (+ = Democrats beat their polls)
+const G = NIGHT.grid.length;
+const decode16 = (b64) => { const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return Float64Array.from(new Uint16Array(u8.buffer), (v) => v / 65535); };
+const PW = decode16(NIGHT.p_win);              // P(challenger wins | national error), race-major: race r, grid g at r*G + g
+const HOUSE = decode16(NIGHT.house_control);    // P(Democrats win the House | national error)
+const MISS = NIGHT.grid.map((z) => z * NIGHT.national_sd);  // points, + = Democrats beat their polls
 const races = NIGHT.races;
 const idx = new Map(races.map((r, i) => [r.id, i]));
 const short = { DEM: "D", IND: "I", REP: "R" };
@@ -130,51 +131,62 @@ function save() {
   catch (e) { document.getElementById("saved-note").textContent = "This browser isn't saving results; they'll reset on reload."; }
 }
 
-function weights() {
-  const w = new Float64Array(n).fill(1);
+// Posterior over the national error: prior times the chance of each entered result at each grid point.
+function posterior() {
+  const w = Float64Array.from(NIGHT.prior), df = NIGHT.t_df, ts = Math.sqrt((df - 2) / df);
   for (const [id, r] of Object.entries(results)) {
     const i = idx.get(id); if (i == null || !r.winner) continue;
-    const off = i * n, sign = r.winner === "challenger" ? 1 : -1;
-    if (r.margin != null && !Number.isNaN(r.margin)) {
-      const obs = sign * Math.abs(r.margin), sd = NIGHT.margin_sd;
-      for (let s = 0; s < n; s++) { const z = (M[off + s] / 10 - obs) / sd; w[s] *= Math.exp(-0.5 * z * z); }
-    } else {
-      for (let s = 0; s < n; s++) if ((M[off + s] > 0 ? 1 : -1) !== sign) w[s] *= NIGHT.called_weight;
+    const race = races[i], sign = r.winner === "challenger" ? 1 : -1;
+    for (let g = 0; g < G; g++) {
+      let l;
+      if (r.margin != null && !Number.isNaN(r.margin)) {
+        // The race's own error (Student t), widened for reporting noise in the margin.
+        const scale = Math.sqrt(race.sd * race.sd + NIGHT.margin_sd * NIGHT.margin_sd) * ts;
+        const u = (sign * Math.abs(r.margin) - race.expected - NIGHT.grid[g] * race.national_sd) / scale;
+        l = Math.pow(1 + u * u / df, -(df + 1) / 2);
+      } else {
+        const p = PW[i * G + g]; l = sign > 0 ? p : 1 - p;
+      }
+      w[g] *= Math.max(l, 1e-300);
     }
   }
+  let tot = 0; for (let g = 0; g < G; g++) tot += w[g];
+  for (let g = 0; g < G; g++) w[g] /= tot;
   return w;
 }
 
-function summarize(w) {
-  let tot = 0, tot2 = 0; for (let s = 0; s < n; s++) { tot += w[s]; tot2 += w[s] * w[s]; }
-  const p = races.map((r, i) => { let a = 0; const off = i * n; for (let s = 0; s < n; s++) if (M[off + s] > 0) a += w[s]; return a / tot; });
-  const sen = races.map((r, i) => r.kind === "senate" ? i : -1).filter((i) => i >= 0);
+function summarize(w, entered) {
+  const p = races.map((r, i) => { let a = 0; for (let g = 0; g < G; g++) a += w[g] * PW[i * G + g]; return a; });
+  // Senate: exact distribution of Republican wins among races still out, at each grid point.
+  let calledRep = 0; const open = [];
+  races.forEach((r, i) => { if (r.kind !== "senate") return; const e = entered[r.id];
+    if (e && e.winner) { if (e.winner === "rep") calledRep++; } else open.push(i); });
+  const need = NIGHT.senate.rep_control_seats - NIGHT.senate.seats_not_up.REP - calledRep;
   let rc = 0, hc = 0, nat = 0;
-  for (let s = 0; s < n; s++) {
-    let rep = NIGHT.senate.seats_not_up.REP;
-    for (const i of sen) if (M[i * n + s] <= 0) rep++;
-    if (rep >= NIGHT.senate.rep_control_seats) rc += w[s];
-    if (HOUSE[s] >= NIGHT.house.control_seats) hc += w[s];
-    nat += w[s] * NAT[s] / 100;
+  for (let g = 0; g < G; g++) {
+    let dist = new Float64Array(open.length + 1); dist[0] = 1;
+    open.forEach((i, k) => { const q = 1 - PW[i * G + g];
+      for (let j = k + 1; j >= 1; j--) dist[j] = dist[j] * (1 - q) + dist[j - 1] * q; dist[0] *= 1 - q; });
+    let pr = 0; for (let j = Math.max(need, 0); j <= open.length; j++) pr += dist[j];
+    rc += w[g] * pr; hc += w[g] * HOUSE[g]; nat += w[g] * MISS[g];
   }
-  // Weighted 10th and 90th percentiles of the national error.
-  const order = Array.from(NAT.keys()).sort((a, b) => NAT[a] - NAT[b]);
   let c = 0, lo = null, hi = null;
-  for (const s of order) { c += w[s] / tot; if (lo == null && c >= 0.1) lo = NAT[s] / 100; if (hi == null && c >= 0.9) { hi = NAT[s] / 100; break; } }
-  return { p, rep_control: rc / tot, house_dem: hc / tot, national: nat / tot, lo, hi, ess: tot * tot / tot2 };
+  for (let g = 0; g < G; g++) { c += w[g]; if (lo == null && c >= 0.1) lo = MISS[g]; if (hi == null && c >= 0.9) hi = MISS[g]; }
+  // How unusual the implied miss is under the forecast: the prior's chance of a miss at least this big.
+  let tail = 0; for (let g = 0; g < G; g++) if (Math.abs(MISS[g]) >= Math.abs(nat)) tail += NIGHT.prior[g];
+  return { p, rep_control: rc, house_dem: hc, national: nat, lo, hi, tail };
 }
 
 let prior = null;
 function render() {
-  const w = weights(), now = summarize(w);
-  if (!prior) prior = summarize(new Float64Array(n).fill(1));
+  const now = summarize(posterior(), results);
+  if (!prior) prior = summarize(Float64Array.from(NIGHT.prior), {});
   const nCalled = Object.values(results).filter((r) => r.winner).length;
   const asOf = new Date(NIGHT.as_of + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   document.getElementById("eyebrow").textContent = `Election night · forecast of ${asOf} · ${nCalled} result${nCalled === 1 ? "" : "s"} entered`;
-  const demMaj = 1 - now.rep_control;
   document.getElementById("headline").textContent = nCalled
-    ? `With ${nCalled} result${nCalled === 1 ? "" : "s"} in, Republicans keep the Senate in ${Math.round(now.rep_control * 100)} of 100 simulations`
-    : `Republicans keep the Senate in ${Math.round(now.rep_control * 100)} of 100 simulations`;
+    ? `With ${nCalled} result${nCalled === 1 ? "" : "s"} in, Republicans have a ${pct(now.rep_control)} chance to keep the Senate`
+    : `Republicans have a ${pct(now.rep_control)} chance to keep the Senate`;
   // Colored by which party the change helps: up = Democrats/challenger, unless `rep` (a Republican odds line).
   const delta = (a, b, rep = false) => { const d = (a - b) * 100; if (Math.abs(d) < 0.5) return `<span class="delta">no change</span>`;
     return `<span class="delta ${(d > 0) !== rep ? "up" : "down"}">${d > 0 ? "+" : ""}${d.toFixed(0)} pts</span>`; };
@@ -185,8 +197,8 @@ function render() {
     { big: miss(now.national), label: "Polling miss so far (+ = that party beat its polls)", was: `80% range: ${miss(now.lo)} to ${miss(now.hi)}` },
   ].map((c) => `<div class="card"><div class="big">${c.big}</div><div class="label">${c.label}</div><div class="was">${c.was}</div></div>`).join("");
   const warn = document.getElementById("ess-warn");
-  warn.hidden = now.ess > 400;
-  warn.textContent = `The results entered so far match only about ${Math.round(now.ess)} of the ${n.toLocaleString()} simulations, so these numbers are rough. Results this far from the forecast mean the model's error sizes were too small.`;
+  warn.hidden = now.tail >= 0.05;
+  warn.textContent = `The results so far point to a national polling miss of ${miss(now.national)}. The forecast expected a miss that large only ${Math.max(1, Math.round(now.tail * 100))}% of the time, so its error sizes were probably too small, and the odds above are likely too confident.`;
 
   const rows = races.map((r, i) => ({ r, i })).filter(({ r }) => r.kind === filter)
     .sort((a, b) => Math.abs(a.r.p_prior - 0.5) - Math.abs(b.r.p_prior - 0.5));
@@ -224,8 +236,8 @@ document.querySelectorAll(".filters button[data-filter]").forEach((b) => b.addEv
 document.getElementById("reset").addEventListener("click", () => { results = { ...reported }; try { localStorage.removeItem(KEY); } catch (e) {} render(); });
 
 document.getElementById("method").innerHTML = `
-  <p>The forecast's ${n.toLocaleString()} simulated elections share one national polling error across every Senate, governor and House race. Marking a race as called keeps the simulations where that side won (others keep a ${NIGHT.called_weight * 100}% weight, so one surprise can't empty the set). Adding the winning margin weights each simulation by how close it came (within about ${NIGHT.margin_sd} points). Every other race, and control of each chamber, is then read from the simulations that fit what's happened.</p>
-  <p>A called race the forecast already expected changes little: it only rules out unlikely simulations. Margins tell it more, and an upset tells it the most. Results are entered by hand and saved only in your browser. Forecast: pollcast reference config, ${NIGHT.as_of}.</p>`;
+  <p>Every Senate, governor and House race in the forecast shares one national polling error; each race also has its own error, independent of the others. A called race tells you which national errors are consistent with it: Ossoff winning makes a big polling miss toward Democrats' opponents less likely. Each result multiplies the chance of every possible national error by how likely that result was under it, and a winning margin does the same using how close the forecast came (allowing ${NIGHT.margin_sd} points of reporting noise). Every other race, and control of each chamber, is then averaged over the updated national error, so the numbers stay exact however many results are in.</p>
+  <p>A called race the forecast already expected changes little: it only rules out unlikely polling misses. Margins tell it more, and an upset tells it the most. Results are entered by hand and saved only in your browser. Forecast: pollcast reference config, ${NIGHT.as_of}.</p>`;
 save();
 render();
 </script>

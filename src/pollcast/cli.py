@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         out = args.out or config.data_dir / "output" / f"night_{payload['as_of'][:4]}.html"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(render_night_page(payload, standalone=not args.fragment))
-        print(f"{len(payload['races'])} races, {payload['n_sims']:,} joint simulations -> {out}")
+        print(f"{len(payload['races'])} races, House control {payload['house']['p_control_prior']:.1%} -> {out}")
         return 0
 
     if args.command == "backtest" and args.history:
