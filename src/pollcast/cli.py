@@ -63,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
     p_map.add_argument("--fragment", action="store_true",
                        help="omit the <html> wrapper (for hosts that add their own)")
 
+    p_night = sub.add_parser("night", help="write the election-night page (enter results, odds update)")
+    p_night.add_argument("--as-of", type=_date)
+    p_night.add_argument("--out", type=Path)
+    p_night.add_argument("--fragment", action="store_true")
+
     p_bt = sub.add_parser("backtest", help="replay past Senate cycles and score the forecasts")
     p_bt.add_argument("--cycles", type=int, nargs="+", default=[2018, 2020, 2022, 2024])
     p_bt.add_argument("--leads", type=int, nargs="+", default=[0, 7, 30, 60, 90],
@@ -152,6 +157,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"governor: {len(governor['states'])} races; challengers win {median} in the median simulation")
         print(f"-> {out}")
         return 0
+    if args.command == "night":
+        from pollcast.night import night_payload
+        from pollcast.web import render_night_page
+
+        payload = night_payload(config, as_of=args.as_of)
+        out = args.out or config.data_dir / "output" / f"night_{payload['as_of'][:4]}.html"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(render_night_page(payload, standalone=not args.fragment))
+        print(f"{len(payload['races'])} races, {payload['n_sims']:,} joint simulations -> {out}")
+        return 0
+
     if args.command == "backtest" and args.history:
         from pollcast.history import run_history_backtest
 

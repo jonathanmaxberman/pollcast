@@ -123,9 +123,9 @@ def national_environment(config: Config, hc: HouseConfig, as_of: date) -> dict:
     }
 
 
-def house_forecast(config: Config, as_of: date | None = None) -> dict:
+def house_inputs(config: Config, as_of: date) -> tuple[pd.DataFrame, "HouseConfig", dict]:
+    """Each district's expected margin and challenger, the settings, and the national environment."""
     hc = HouseConfig(**config.house)
-    as_of = as_of or datetime.now(UTC).date()
     snap = latest_snapshot(config.data_dir, "downballot_districts", as_of)
     if snap is None:
         raise RuntimeError("house: fetch downballot_districts first")
@@ -143,6 +143,14 @@ def house_forecast(config: Config, as_of: date | None = None) -> dict:
     # Where an independent is the main opponent, margins are independent minus
     # Republican; the lean model stands in for the anti-Republican vote.
     d["challenger"] = d["district"].map(lambda k: dp.get(k, {}).get("challenger", "DEM"))
+    d.attrs["district_polls"] = dp
+    return d, hc, env
+
+
+def house_forecast(config: Config, as_of: date | None = None) -> dict:
+    as_of = as_of or datetime.now(UTC).date()
+    d, hc, env = house_inputs(config, as_of)
+    dp = d.attrs["district_polls"]
 
     rng = np.random.default_rng(hc.seed)
     national = _t_draws(rng, hc.t_df, hc.national_sd, (hc.n_sims, 1))

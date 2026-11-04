@@ -1,0 +1,228 @@
+<title>Election Night 2026</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: headline odds that move as results come in, the implied polling miss, then every race with result controls. */
+:root {
+  --bg: #f7f7f5; --surface: #ffffff; --fg: #161614; --muted: #5d5c57; --faint: #8b8a84; --rule: #e2e1dc;
+  --c3: #1c5cab; --c2: #6da7ec; --r3: #c4302f; --r2: #ea8580; --up: #1c5cab; --down: #c4302f; --focus: #161614;
+  --font-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1d1d1b; --fg: #f0efec; --muted: #b3b2ab; --faint: #85847e; --rule: #34332f;
+    --c3: #3d86e4; --c2: #2b5d9f; --r3: #db4544; --r2: #9a3433; --up: #6aa6ef; --down: #f08a86; --focus: #f0efec;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --surface: #1d1d1b; --fg: #f0efec; --muted: #b3b2ab; --faint: #85847e; --rule: #34332f;
+  --c3: #3d86e4; --c2: #2b5d9f; --r3: #db4544; --r2: #9a3433; --up: #6aa6ef; --down: #f08a86; --focus: #f0efec;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.page { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-weight: 800; font-size: clamp(28px, 5vw, 42px); line-height: 1.08; margin: 6px 0 8px; text-wrap: balance; }
+h2 { font-size: 18px; font-weight: 800; margin: 0; }
+.lede { margin: 0; color: var(--muted); max-width: 64ch; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; }
+.card .big { font-weight: 800; font-size: 32px; line-height: 1.1; font-family: var(--font-data); }
+.card .label { font-size: 13px; color: var(--muted); }
+.card .was { font-size: 12px; color: var(--muted); }
+.delta.up { color: var(--up); } .delta.down { color: var(--down); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.warn { font-size: 13px; padding: 10px 12px; border: 1px solid var(--r2); border-radius: 6px; background: var(--surface); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+button.plain { font: inherit; font-size: 13px; color: var(--fg); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button.plain:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.filters { display: flex; gap: 6px; }
+.filters button[aria-pressed="true"] { border-color: var(--fg); font-weight: 600; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 680px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tr.called td { background: color-mix(in srgb, var(--rule) 35%, transparent); }
+td.n, th.n { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.race { font-weight: 600; }
+.kind { font-size: 12px; color: var(--muted); font-weight: 400; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--fg); padding: 5px 10px; cursor: pointer; border-right: 1px solid var(--rule); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"].dem { background: var(--c3); color: #fff; }
+.seg button[aria-pressed="true"].rep { background: var(--r3); color: #fff; }
+.seg button[aria-pressed="true"].none { background: var(--rule); }
+input.margin { font: inherit; font-family: var(--font-data); font-size: 13px; width: 86px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--fg); }
+input.margin:disabled { opacity: 0.4; }
+.bar { position: relative; height: 6px; width: 90px; background: var(--r3); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
+.bar span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c3); }
+.method { color: var(--muted); font-size: 13px; max-width: 72ch; display: grid; gap: 8px; }
+.method p { margin: 0; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow" id="eyebrow">Election night · 2026</div>
+    <h1 id="headline">Election night</h1>
+    <p class="lede">Mark races as they're called, and add the margin when you know it. Every race shares one national polling error, so each result updates the odds for every race still out.</p>
+  </header>
+
+  <div class="cards" id="cards"></div>
+  <p class="warn" id="ess-warn" hidden></p>
+
+  <section style="display:grid;gap:12px">
+    <div class="toolbar">
+      <h2>Races</h2>
+      <div class="filters" role="group" aria-label="Show">
+        <button type="button" class="plain" data-filter="senate" aria-pressed="true">Senate</button>
+        <button type="button" class="plain" data-filter="governor" aria-pressed="false">Governor</button>
+        <button type="button" class="plain" id="reset">Clear all results</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Race</th><th>Result</th><th class="n">Won by (pts)</th><th class="n">Before results</th><th class="n">Now</th><th class="n">Change</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note" id="saved-note"></p>
+  </section>
+
+  <section class="method">
+    <h2 style="color:var(--fg)">How this works</h2>
+    <div id="method"></div>
+  </section>
+</div>
+
+<script>
+const NIGHT = /*__NIGHT__*/null;
+
+const n = NIGHT.n_sims;
+const decode16 = (b64, Type) => { const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Type(u8.buffer); };
+const M = decode16(NIGHT.margins, Int16Array);          // race-major, x10
+const HOUSE = decode16(NIGHT.house_dem_seats, Uint16Array);
+const NAT = decode16(NIGHT.national, Int16Array);       // x100, points (+ = Democrats beat their polls)
+const races = NIGHT.races;
+const idx = new Map(races.map((r, i) => [r.id, i]));
+const short = { DEM: "D", IND: "I", REP: "R" };
+const pct = (p) => (p > 0.995 ? ">99%" : p < 0.005 ? "<1%" : Math.round(p * 100) + "%");
+const KEY = "pollcast-night-2026";
+
+let results = {};
+try { results = JSON.parse(localStorage.getItem(KEY) || "null") || null; } catch (e) { results = null; }
+if (!results) results = { "senate:Georgia": { winner: "challenger", margin: null } };  // Ossoff, called
+let filter = "senate";
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(results)); document.getElementById("saved-note").textContent = "Results are saved in this browser only."; }
+  catch (e) { document.getElementById("saved-note").textContent = "This browser isn't saving results; they'll reset on reload."; }
+}
+
+function weights() {
+  const w = new Float64Array(n).fill(1);
+  for (const [id, r] of Object.entries(results)) {
+    const i = idx.get(id); if (i == null || !r.winner) continue;
+    const off = i * n, sign = r.winner === "challenger" ? 1 : -1;
+    if (r.margin != null && !Number.isNaN(r.margin)) {
+      const obs = sign * Math.abs(r.margin), sd = NIGHT.margin_sd;
+      for (let s = 0; s < n; s++) { const z = (M[off + s] / 10 - obs) / sd; w[s] *= Math.exp(-0.5 * z * z); }
+    } else {
+      for (let s = 0; s < n; s++) if ((M[off + s] > 0 ? 1 : -1) !== sign) w[s] *= NIGHT.called_weight;
+    }
+  }
+  return w;
+}
+
+function summarize(w) {
+  let tot = 0, tot2 = 0; for (let s = 0; s < n; s++) { tot += w[s]; tot2 += w[s] * w[s]; }
+  const p = races.map((r, i) => { let a = 0; const off = i * n; for (let s = 0; s < n; s++) if (M[off + s] > 0) a += w[s]; return a / tot; });
+  const sen = races.map((r, i) => r.kind === "senate" ? i : -1).filter((i) => i >= 0);
+  let rc = 0, hc = 0, nat = 0;
+  for (let s = 0; s < n; s++) {
+    let rep = NIGHT.senate.seats_not_up.REP;
+    for (const i of sen) if (M[i * n + s] <= 0) rep++;
+    if (rep >= NIGHT.senate.rep_control_seats) rc += w[s];
+    if (HOUSE[s] >= NIGHT.house.control_seats) hc += w[s];
+    nat += w[s] * NAT[s] / 100;
+  }
+  // Weighted 10th and 90th percentiles of the national error.
+  const order = Array.from(NAT.keys()).sort((a, b) => NAT[a] - NAT[b]);
+  let c = 0, lo = null, hi = null;
+  for (const s of order) { c += w[s] / tot; if (lo == null && c >= 0.1) lo = NAT[s] / 100; if (hi == null && c >= 0.9) { hi = NAT[s] / 100; break; } }
+  return { p, rep_control: rc / tot, house_dem: hc / tot, national: nat / tot, lo, hi, ess: tot * tot / tot2 };
+}
+
+let prior = null;
+function render() {
+  const w = weights(), now = summarize(w);
+  if (!prior) prior = summarize(new Float64Array(n).fill(1));
+  const nCalled = Object.values(results).filter((r) => r.winner).length;
+  const asOf = new Date(NIGHT.as_of + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  document.getElementById("eyebrow").textContent = `Election night · forecast of ${asOf} · ${nCalled} result${nCalled === 1 ? "" : "s"} entered`;
+  const demMaj = 1 - now.rep_control;
+  document.getElementById("headline").textContent = nCalled
+    ? `With ${nCalled} result${nCalled === 1 ? "" : "s"} in, Republicans keep the Senate in ${Math.round(now.rep_control * 100)} of 100 simulations`
+    : `Republicans keep the Senate in ${Math.round(now.rep_control * 100)} of 100 simulations`;
+  // Colored by which party the change helps: up = Democrats/challenger, unless `rep` (a Republican odds line).
+  const delta = (a, b, rep = false) => { const d = (a - b) * 100; if (Math.abs(d) < 0.5) return `<span class="delta">no change</span>`;
+    return `<span class="delta ${(d > 0) !== rep ? "up" : "down"}">${d > 0 ? "+" : ""}${d.toFixed(0)} pts</span>`; };
+  const miss = (x) => Math.abs(x) < 0.05 ? "about even" : `${x > 0 ? "Democrats" : "Republicans"} +${Math.abs(x).toFixed(1)}`;
+  document.getElementById("cards").innerHTML = [
+    { big: pct(now.rep_control), label: "Republicans keep the Senate", was: `was ${pct(prior.rep_control)} · ${delta(now.rep_control, prior.rep_control, true)}` },
+    { big: pct(now.house_dem), label: "Democrats win the House", was: `was ${pct(prior.house_dem)} · ${delta(now.house_dem, prior.house_dem)}` },
+    { big: miss(now.national), label: "Polling miss so far (+ = that party beat its polls)", was: `80% range: ${miss(now.lo)} to ${miss(now.hi)}` },
+  ].map((c) => `<div class="card"><div class="big">${c.big}</div><div class="label">${c.label}</div><div class="was">${c.was}</div></div>`).join("");
+  const warn = document.getElementById("ess-warn");
+  warn.hidden = now.ess > 400;
+  warn.textContent = `The results entered so far match only about ${Math.round(now.ess)} of the ${n.toLocaleString()} simulations, so these numbers are rough. Results this far from the forecast mean the model's error sizes were too small.`;
+
+  const rows = races.map((r, i) => ({ r, i })).filter(({ r }) => r.kind === filter)
+    .sort((a, b) => Math.abs(a.r.p_prior - 0.5) - Math.abs(b.r.p_prior - 0.5));
+  document.getElementById("rows").innerHTML = rows.map(({ r, i }) => {
+    const res = results[r.id] || {}, called = !!res.winner, c = short[r.challenger];
+    const label = `${r.state}${r.special ? " (special)" : ""} <span class="kind">${r.kind === "senate" ? "Senate" : "Governor"}</span>`;
+    const seg = `<div class="seg" role="group" aria-label="Result for ${r.state}">` +
+      `<button type="button" class="dem" data-id="${r.id}" data-w="challenger" aria-pressed="${res.winner === "challenger"}">${c} won</button>` +
+      `<button type="button" class="rep" data-id="${r.id}" data-w="rep" aria-pressed="${res.winner === "rep"}">R won</button>` +
+      `<button type="button" class="none" data-id="${r.id}" data-w="" aria-pressed="${!called}">Not called</button></div>`;
+    const margin = `<input class="margin" type="number" step="0.1" min="0" inputmode="decimal" data-id="${r.id}" aria-label="Winning margin in ${r.state}" placeholder="optional" ${called ? "" : "disabled"} value="${res.margin != null ? res.margin : ""}">`;
+    const pNow = called ? (res.winner === "challenger" ? 1 : 0) : now.p[i];
+    const bar = (p) => `<span class="bar" aria-hidden="true"><span style="width:${(p * 100).toFixed(1)}%"></span></span>`;
+    const ch = called ? `<span class="kind">called</span>` : delta(now.p[i], r.p_prior);
+    return `<tr class="${called ? "called" : ""}"><td class="race">${label}</td><td>${seg}</td><td class="n">${margin}</td>` +
+      `<td class="n">${c} ${pct(r.p_prior)}</td><td class="n">${c} ${pct(pNow)}${bar(pNow)}</td><td class="n">${ch}</td></tr>`;
+  }).join("");
+  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+    const id = b.dataset.id, wv = b.dataset.w;
+    if (!wv) delete results[id]; else results[id] = { winner: wv, margin: results[id]?.margin ?? null };
+    save(); render();
+  }));
+  document.querySelectorAll("input.margin").forEach((inp) => inp.addEventListener("change", () => {
+    const r = results[inp.dataset.id]; if (!r) return;
+    const v = parseFloat(inp.value); r.margin = Number.isFinite(v) ? Math.abs(v) : null;
+    save(); render();
+  }));
+}
+
+document.querySelectorAll(".filters button[data-filter]").forEach((b) => b.addEventListener("click", () => {
+  filter = b.dataset.filter;
+  document.querySelectorAll(".filters button[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+document.getElementById("reset").addEventListener("click", () => { results = {}; save(); render(); });
+
+document.getElementById("method").innerHTML = `
+  <p>The forecast's ${n.toLocaleString()} simulated elections share one national polling error across every Senate, governor and House race. Marking a race as called keeps the simulations where that side won (others keep a ${NIGHT.called_weight * 100}% weight, so one surprise can't empty the set). Adding the winning margin weights each simulation by how close it came (within about ${NIGHT.margin_sd} points). Every other race, and control of each chamber, is then read from the simulations that fit what's happened.</p>
+  <p>A called race the forecast already expected changes little: it only rules out unlikely simulations. Margins tell it more, and an upset tells it the most. Results are entered by hand and saved only in your browser. Forecast: pollcast reference config, ${NIGHT.as_of}.</p>`;
+save();
+render();
+</script>

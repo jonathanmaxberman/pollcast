@@ -13,6 +13,10 @@ and let the backtests tell you whether it works.
 **Live forecast** (the best model so far; updates as the model improves):
 [jonathanmaxberman.github.io/pollcast](https://jonathanmaxberman.github.io/pollcast/)
 
+**Election night** (enter results as races are called; every other race updates):
+[jonathanmaxberman.github.io/pollcast/night](https://jonathanmaxberman.github.io/pollcast/night/) ·
+`pollcast night` builds it
+
 **Published record** (fixed; committed on election day, November 3, 2026, before results):
 [interactive page](https://jonathanmaxberman.github.io/pollcast/predictions/2026-11-03/forecast.html) ·
 [numbers for every race](predictions/2026-11-03/PREDICTION.md).

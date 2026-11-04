@@ -500,7 +500,8 @@ def presidential_priors(config: Config, states: list[str], before_year: int) -> 
                           "IND": np.nan, "label": f"Presidential {year}"} for st in states if st in m.index])
 
 
-def forecast(config: Config, as_of: date | None = None, race_type: str = "senate") -> dict:
+def forecast(config: Config, as_of: date | None = None, race_type: str = "senate",
+             return_inputs: bool = False):
     """Run the simulation and return a JSON-ready forecast.
 
     One simulation per combination of adjustment choices (`scenarios`), so the
@@ -525,6 +526,8 @@ def forecast(config: Config, as_of: date | None = None, race_type: str = "senate
     groups, left_out = adjustment_groups(config, sim, as_of)
 
     scenarios = {}
+    default_choice = {g["module"]: g["default"] for g in groups}
+    headline_inputs = inputs
     for choice in scenario_keys(groups):
         adjusted = inputs
         for g in groups:
@@ -532,6 +535,8 @@ def forecast(config: Config, as_of: date | None = None, race_type: str = "senate
             if option["key"] != "off":
                 adjusted = option["_indicator"].apply(adjusted, option["_params"], lead)
         r = simulate(adjusted, sim)
+        if choice == default_choice:
+            headline_inputs = adjusted
         scenarios[scenario_id(choice)] = {
             "control": control_summary(r),
             # Per race, in `states` order: [p_challenger, mean, interval80 low, high]
@@ -577,7 +582,7 @@ def forecast(config: Config, as_of: date | None = None, race_type: str = "senate
                 ],
             }
         )
-    return {
+    result = {
         "race_type": sim.race_type,
         "cycle": sim.cycle,
         "as_of": as_of.isoformat(),
@@ -596,4 +601,8 @@ def forecast(config: Config, as_of: date | None = None, race_type: str = "senate
         "control": headline["control"],
         "states": states,
     }
+    if return_inputs:
+        # For the election-night page: the race inputs behind the headline, and the settings.
+        return result, headline_inputs, sim
+    return result
 

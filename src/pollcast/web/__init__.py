@@ -47,3 +47,16 @@ def render_forecast_page(senate: dict, house: dict | None, topology: dict, *,
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
         "</head>\n<body>\n" + body + "\n</body>\n</html>\n"
     )
+
+
+def render_night_page(payload: dict, *, standalone: bool = True) -> str:
+    """The election-night page: results entered by hand condition the joint simulation."""
+    body = resources.files("pollcast.web").joinpath("night.html").read_text().replace(
+        "/*__NIGHT__*/null", _embed(payload))
+    if not standalone:
+        return body
+    return (
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+        "</head>\n<body>\n" + body + "\n</body>\n</html>\n"
+    )
