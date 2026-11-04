@@ -92,8 +92,15 @@ class SpendingCloseness(_Spending):
     expected = "kappa > 0: excess spending pulls the result toward even"
     expected_sign = 1
 
+    def label(self) -> str:
+        lead = self.settings.get("min_lead_days")
+        return self.description + (f" ({lead}+ days out only)" if lead else "")
+
     def fit(self, races: pd.DataFrame) -> dict:
         rows = races[races["basis"] == "polls"]
+        lead = self.settings.get("min_lead_days")
+        if lead:
+            rows = rows[rows["lead_days"] >= int(lead)]
         X = self.features(rows).assign(absm=rows["mean"].abs())
         ok = X[["log_total", "log_votes"]].notna().all(axis=1)
         X, rows = X[ok], rows[ok]
@@ -114,6 +121,9 @@ class SpendingCloseness(_Spending):
 
     def apply(self, inputs: pd.DataFrame, params: dict, lead_days: int) -> pd.DataFrame:
         out = inputs.copy()
+        lead = self.settings.get("min_lead_days")
+        if lead and lead_days < int(lead):
+            return out
         X = self.features(out)
         a, b, c = params["coef"]
         e = X["log_total"] - (a + b * out["mean"].abs() + c * X["log_votes"])

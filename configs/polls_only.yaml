@@ -200,6 +200,15 @@ indicators:
   spending_closeness:
     enabled: false
     prior_sd: 0.05
+  # Post-hoc try: the same closeness adjustment, fit and applied only 30 or more
+  # days out, chosen after the first test showed the gain fading near the
+  # election. Only the 2018-2024 replays have those lead times.
+  spending_closeness_early:
+    module: spending_closeness
+    enabled: true    # default: best combination 2018-2024 (0.1380 vs 0.1403); only acts 30+ days out
+    prior_sd: 0.05
+    min_lead_days: 30
+    post_hoc: "30-day floor chosen after run on 2026-11-04 showed the gain fading from +0.009 at 60 days to +0.0008 at eve"
   spending_tilt:
     enabled: false
     prior_sd: 5.0

@@ -182,6 +182,9 @@ def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
                           "economy_vs_president", "calibrated_errors", "undecided_allocation",
                           "late_momentum", "midterm_penalty", "spending_closeness", "spending_tilt"):
             continue
+        # The history file only has election-eve polls: variants for earlier leads can't be tested.
+        if settings.get("min_lead_days"):
+            continue
         ind = INDICATORS[settings.get("module", name)](settings)
         ind.prepare(config)
         r = score_indicator(races, ind, config, name=name)
