@@ -107,6 +107,8 @@ Census-based adjustments). Results from the run on 2026-11-03:
 | Late momentum | 0.2568 -> 0.2568 | 8 of 13 (fails; late movement partly reverses, mu = -0.22) |
 | Midterm penalty for the president's party | 0.2568 -> 0.2574 | 2 of 13 (fails; polls already capture it) |
 | Pollster accuracy weights | 0.2568 -> 0.2563 | 7 of 13 (fails 2018-2024: 1 of 4) |
+| Outside spending beyond what polls justify: closer race (FEC, 2010+) | 0.2568 -> 0.2569 | 2 of 7 spending cycles (fails at eve; on 2018-2024 it passed, 0.1927 -> 0.1870, 3 of 4, with the gain growing from +0.0008 at eve to +0.009 at 60 days: spending looks informative early and the public polls catch up) |
+| Outside spending tilt toward one party | 0.2568 -> 0.2569 | 3 of 7 (fails; hurts at eve) |
 | **Live default: undecided + lead-aware blend** | **0.2568 -> 0.2545** | **10 of 13** |
 
 Registered-vs-likely voter gap (measured within each cycle's polls) can only

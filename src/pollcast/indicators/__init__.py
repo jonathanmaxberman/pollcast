@@ -8,6 +8,7 @@ from pollcast.indicators.fundamentals import SenateFundamentals
 from pollcast.indicators.news import NewsCoverage
 from pollcast.indicators.polls_shape import LateMomentum, MidtermPenalty, UndecidedAllocation
 from pollcast.indicators.search import SearchMomentum
+from pollcast.indicators.spending import SpendingCloseness, SpendingTilt
 from pollcast.indicators.undecided import UndecidedStretch
 from pollcast.indicators.weather import ElectionDayRain
 
@@ -15,7 +16,8 @@ INDICATORS: dict[str, type[Indicator]] = {
     cls.name: cls for cls in (UndecidedStretch, ElectionDayRain, EconomyVsPresident, NewsCoverage,
                               SenateFundamentals, SearchMomentum, EducationCorrelation,
                               EducationShift, EducationSwing, CalibratedErrors,
-                              UndecidedAllocation, LateMomentum, MidtermPenalty)
+                              UndecidedAllocation, LateMomentum, MidtermPenalty,
+                              SpendingCloseness, SpendingTilt)
 }
 
 __all__ = ["INDICATORS", "Indicator"]

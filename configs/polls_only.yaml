@@ -79,6 +79,10 @@ sources:
     enabled: true
     vintage: "2023"
 
+  # Outside spending in Senate races (FEC independent expenditures, 2010+).
+  fec_ie:
+    enabled: true
+
   # Daily news-coverage archive. Run every day: the API only keeps ~3 months.
   gdelt:
     enabled: true
@@ -190,6 +194,15 @@ indicators:
   midterm_penalty:
     enabled: false
     prior_sd: 1.0
+  # Declared before testing: outside spending beyond what the polls justify
+  # reflects private polling. Closeness: kappa > 0 (closer than polled).
+  # Tilt: beta > 0 (the side outspending its polling does better).
+  spending_closeness:
+    enabled: false
+    prior_sd: 0.05
+  spending_tilt:
+    enabled: false
+    prior_sd: 5.0
   # Not testable until there is coverage history (archive began 2026-11-03).
   news_inflation:
     module: news_coverage

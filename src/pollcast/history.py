@@ -180,7 +180,7 @@ def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
         if module not in ("undecided_stretch", "senate_fundamentals", "education_shift",
                           "education_correlation", "education_swing", "election_day_rain",
                           "economy_vs_president", "calibrated_errors", "undecided_allocation",
-                          "late_momentum", "midterm_penalty"):
+                          "late_momentum", "midterm_penalty", "spending_closeness", "spending_tilt"):
             continue
         ind = INDICATORS[settings.get("module", name)](settings)
         ind.prepare(config)
