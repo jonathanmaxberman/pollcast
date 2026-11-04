@@ -21,9 +21,11 @@ Everything else is then read from the reweighted simulations.
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 from datetime import UTC, date, datetime
 
 import numpy as np
+import yaml
 
 from pollcast.config import Config
 from pollcast.house import house_inputs
@@ -32,6 +34,20 @@ from pollcast.simulate import _t_draws, forecast
 
 def _pack_int16(a: np.ndarray, scale: float) -> str:
     return base64.b64encode(np.clip(np.round(a * scale), -32767, 32767).astype("<i2").tobytes()).decode()
+
+
+def reported_calls(path: Path) -> list[dict]:
+    """Calls to ship with the page, from a YAML list of {race, winner: DEM|REP|IND, margin?, source}.
+
+    `race` is a page race id such as "senate:Georgia" or "governor:Illinois".
+    """
+    if not path.exists():
+        return []
+    calls = []
+    for c in yaml.safe_load(path.read_text()) or []:
+        calls.append({"id": c["race"], "winner": "rep" if c["winner"] == "REP" else "challenger",
+                      "margin": c.get("margin"), "source": c.get("source", "")})
+    return calls
 
 
 def night_payload(config: Config, as_of: date | None = None, n_sims: int = 20000, seed: int = 2026) -> dict:
@@ -80,6 +96,7 @@ def night_payload(config: Config, as_of: date | None = None, n_sims: int = 20000
         "senate": {"seats_not_up": sen_sim.seats_not_up, "rep_control_seats": sen_sim.rep_control_seats,
                    "p_rep_control_prior": sen_result["control"]["p_rep_control"]},
         "house": {"control_seats": hc.control_seats, "national_margin": env["margin"]},
+        "calls": reported_calls(config.data_dir / "inputs" / "night_calls.yaml"),
         "margin_sd": 2.0,
         "called_weight": 0.003,
     }
