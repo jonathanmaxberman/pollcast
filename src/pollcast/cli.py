@@ -20,10 +20,29 @@ def _date(s: str) -> date:
     return date.fromisoformat(s)
 
 
+def init_configs(target: Path, force: bool = False) -> int:
+    """Copy the packaged starter configs into `target`."""
+    from importlib import resources
+
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ("polls_only.yaml", "polls_fundamentals.yaml", "reference.yaml"):
+        dest = target / name
+        if dest.exists() and not force:
+            print(f"kept {dest} (exists; --force to overwrite)")
+            continue
+        dest.write_text(resources.files("pollcast.examples").joinpath(name).read_text())
+        print(f"wrote {dest}")
+    print("Next: `pollcast fetch --config configs/polls_only.yaml`, then `pollcast map --config ...`.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pollcast")
-    parser.add_argument("--config", "-c", default="configs/polls_only.yaml")
+    parser.add_argument("--config", "-c", default="configs/reference.yaml")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_init = sub.add_parser("init", help="write starter configs into ./configs")
+    p_init.add_argument("--force", action="store_true", help="overwrite existing files")
 
     p_fetch = sub.add_parser("fetch", help="pull raw data into dated snapshots")
     p_fetch.add_argument("sources", nargs="*", help=f"default: enabled sources ({', '.join(SOURCES)})")
@@ -53,6 +72,12 @@ def main(argv: list[str] | None = None) -> int:
                       help="election-eve backtest over 1998-2022 from 538's pollster-ratings history")
 
     args = parser.parse_args(argv)
+    if args.command == "init":
+        return init_configs(Path("configs"), args.force)
+    if not Path(args.config).exists():
+        print(f"pollcast: no config at {args.config}. Run `pollcast init` to write starter configs, "
+              "or pass --config.", file=sys.stderr)
+        return 2
     config = load_config(args.config)
 
     if args.command == "fetch":

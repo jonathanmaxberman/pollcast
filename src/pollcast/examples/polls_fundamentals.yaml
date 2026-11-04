@@ -1,0 +1,274 @@
+# Polls blended with a fundamentals estimate (state lean, incumbency, national mood), weighted by lead time.
+# Generated from configs/reference.yaml by scripts/make_examples.py.
+# Every assumption lives here; edit freely. Turn an adjustment on only after
+# `pollcast backtest` shows it passing.
+name: polls-fundamentals
+data_dir: data
+
+sources:
+  # 538's database, frozen March 2025. Fetched once from the Internet Archive.
+  fivethirtyeight_archive:
+    enabled: true
+    wayback_timestamp: "20250306"
+
+  # 2025 onward. Needs a FiftyPlusOne subscription; export FPO_API_KEY=...
+  fiftyplusone:
+    enabled: false
+    api_key_env: FPO_API_KEY
+    files: [generic, senate_general, governor_general, house_general, presidential_approval, pollsters]
+
+  # NYT poll database (538's successor). Files downloaded from the Times's poll
+  # pages; replace them to update. House includes the national generic ballot.
+  nyt:
+    enabled: true
+    urls: {}
+    files:
+      senate: data/inputs/nyt/senate.csv
+      house: data/inputs/nyt/house.csv
+      governor: data/inputs/nyt/governor.csv
+      president: data/inputs/nyt/president.csv
+      other: data/inputs/nyt/other.csv
+
+  # Cross-check: raw Senate polls, one per line. No sample sizes.
+  electoral_vote:
+    enabled: true
+    cycle: 2026
+    offices: [Senate]
+
+  # 2024 presidential results by House district, on 2026 lines (The Downballot).
+  downballot_districts:
+    enabled: true
+
+  # Other forecasters' current averages, from a local CSV you keep updated.
+  # Used for the House national environment when poll-level data is missing.
+  aggregate_averages:
+    enabled: true
+    race_type: generic
+    path: data/inputs/generic_ballot_averages.csv
+
+  # Certified results, the backtests' ground truth. Senate downloads
+  # automatically; the House file needs a one-time form on Dataverse, so
+  # download it from https://doi.org/10.7910/DVN/IG0UN2 and set house_path.
+  mit_results:
+    enabled: true
+    # house_path: data/inputs/mit/1976-2024-house.tab
+
+  # Election-day precipitation by state: observed for past elections (NOAA
+  # GHCN-Daily), NWS forecast when an election is within 7 days.
+  noaa_weather:
+    enabled: true
+    forecast_stations_per_state: 2
+
+  # Economic series as known on each forecast date (ALFRED vintages).
+  alfred:
+    enabled: true
+    series: [UMCSENT, GASREGW]   # consumer sentiment; regular gas price
+
+  # Search interest in each Senate race's two main candidates (Google Trends).
+  google_trends:
+    enabled: true
+    cycles: [2018, 2020, 2022, 2024]
+    request_pause_seconds: 6
+
+  # State education by race (ACS 5-year bulk tables; no API key needed).
+  census_acs:
+    enabled: true
+    vintages: [2021, 2023]
+
+  # 538's pollster accuracy history (every rated poll since 1998), for
+  # historical house effects.
+  fivethirtyeight_ratings:
+    enabled: true
+    vintage: "2023"
+
+  # Outside spending in Senate races (FEC independent expenditures, 2010+).
+  fec_ie:
+    enabled: true
+
+  # Daily news-coverage archive. Run every day: the API only keeps ~3 months.
+  gdelt:
+    enabled: true
+    country: US
+    lookback_days: 89
+    keywords: [inflation, immigration, crime, gas prices, tariffs, unemployment]
+
+average:
+  race_type: generic
+  cycle: 2026
+  half_life_days: 14
+  max_age_days: 120
+  population_preference: [lv, rv, v, a]
+  exclude_partisan: true
+  exclude_internal: true
+  reference_sample_size: 600
+  max_sample_weight: 2.0
+  pollster_flooding_exponent: 0.5
+  release_lag_days: 2
+  stages: [general]         # leave out primary polls
+  # When several sources poll the same race, use only the first one listed
+  # that has polls, so one poll reported twice isn't counted twice.
+  source_priority: [nyt, fiftyplusone, fivethirtyeight_archive, electoral_vote]
+
+# Indicator modules. Each declares its expected direction before it is
+# tested. `pollcast backtest` scores every indicator listed here, enabled or
+# not. One reaches the headline forecast only if it PASSED (better held-out
+# log loss, effect in the declared direction) AND you set enabled: true.
+# Failed and untested ideas stay enabled: false: they show on the page as
+# options, start on Off, and never switch on by themselves.
+indicators:
+  # Declared before testing: error sizes fit to past misses, by lead time and
+  # race type, improve held-out log loss in both backtests. Listed first so
+  # blends see the calibrated uncertainty.
+  calibrated_errors:
+    enabled: false
+  undecided_stretch:
+    enabled: false
+    prior_sd: 0.1   # shrinkage toward no effect (k = 1)
+  # Second try, chosen AFTER seeing the first fail: it helped 0-30 days out
+  # and hurt at 60-90. Because the cutoff came from the data, a pass here
+  # is weaker evidence than a pass on the first try.
+  undecided_stretch_late:
+    module: undecided_stretch
+    enabled: false
+    prior_sd: 0.1
+    max_lead_days: 30
+    post_hoc: "cutoff chosen after run 20261103T183404Z showed the effect reversing beyond 30 days"
+  # Declared before testing: rain helps Republicans (Gomez, Hansford and Krause 2007).
+  # Backtest uses observed rain (forecasts weren't archived), so a pass is an upper bound.
+  election_day_rain:
+    enabled: false
+    prior_sd: 3.0        # points per inch
+    max_lead_days: 7     # weather forecasts reach about a week
+  # Declared before testing: a souring economy costs the president's party.
+  # Two variants of one module, so the page offers them as one choice.
+  economy_sentiment:
+    module: economy_vs_president
+    enabled: false
+    series: UMCSENT
+    prior_sd: 1.0        # points per unit of z (a 10-point sentiment drop)
+  economy_gas:
+    module: economy_vs_president
+    enabled: false
+    series: GASREGW
+    prior_sd: 1.0        # points per unit of z (a $0.50 rise)
+  # Declared before testing: blending a fundamentals estimate (state lean,
+  # incumbency, national generic ballot) with the polls improves held-out
+  # log loss, most where polls are thin; b_lean > 0. Off until it passes and you turn it on.
+  senate_fundamentals:
+    enabled: false
+    ridge: 1.0
+  # Declared before testing: a late rise in the challenger's search share
+  # (Google Trends, last 14 days vs the 14 before) means they beat their polls.
+  search_momentum:
+    enabled: false
+    prior_sd: 10.0       # points per unit change in search share
+  # Declared before testing: states with many non-college white adults miss
+  # together (sd_edu > 0), judged on the seat-count score since it changes
+  # correlation, not each race's odds.
+  education_correlation:
+    enabled: false
+  # Post-hoc try: proposed after education_correlation's fit showed every
+  # cycle's slope negative. Declared: beta < 0 (challengers run behind their
+  # polls in high non-college-white states). Off unless it passes and you enable it.
+  education_shift:
+    enabled: false
+    prior_sd: 1.0        # skeptical on purpose: tighter than the ~2-point slopes already seen
+    post_hoc: "proposed after run 20261103T194249Z showed all four cycles' education slopes negative"
+  # Declared before testing: the education correction scales with each
+  # cycle's polled education swing (b < 0: a bigger polled Democratic swing in
+  # high non-college-white states means a bigger overstatement).
+  education_swing:
+    enabled: false
+    prior_sd_b: 0.5
+  # Declared before testing: rescaling the polls' side of the blend by how
+  # accurate polls were at each lead time beats the fixed blend.
+  senate_fundamentals_by_lead:
+    module: senate_fundamentals
+    enabled: true
+    ridge: 1.0
+    lead_aware: true
+  # Declared before testing (all three): see pollcast/indicators/polls_shape.py.
+  undecided_allocation:
+    enabled: false
+  late_momentum:
+    enabled: false
+    prior_sd: 0.5
+  midterm_penalty:
+    enabled: false
+    prior_sd: 1.0
+  # Declared before testing: outside spending beyond what the polls justify
+  # reflects private polling. Closeness: kappa > 0 (closer than polled).
+  # Tilt: beta > 0 (the side outspending its polling does better).
+  spending_closeness:
+    enabled: false
+    prior_sd: 0.05
+  # Post-hoc try: the same closeness adjustment, fit and applied only 30 or more
+  # days out, chosen after the first test showed the gain fading near the
+  # election. Only the 2018-2024 replays have those lead times.
+  spending_closeness_early:
+    module: spending_closeness
+    enabled: false
+    prior_sd: 0.05
+    min_lead_days: 30
+    post_hoc: "30-day floor chosen after run on 2026-11-04 showed the gain fading from +0.009 at 60 days to +0.0008 at eve"
+  spending_tilt:
+    enabled: false
+    prior_sd: 5.0
+  # Not testable until there is coverage history (archive began 2026-11-03).
+  news_inflation:
+    module: news_coverage
+    keyword: inflation
+
+# Monte Carlo for Senate control. Error sizes are assumptions until the
+# backtest harness calibrates them against 2018-2026.
+simulate:
+  race_type: senate
+  cycle: 2026
+  n_sims: 20000
+  seed: 2026
+  national_sd: 3.0      # shared error: every state misses together by this much (sd)
+  state_sd: 4.0         # independent error per race
+  few_polls_sd: 6.0     # extra error, divided by sqrt(effective number of polls)
+  prior_sd: 9.0         # error around a prior result when a state has no polls
+  t_df: 5               # Student-t degrees of freedom; lower = fatter tails
+  # Seats not up in 2026. King and Sanders count with the Democrats.
+  seats_not_up: {DEM: 34, REP: 31}
+  rep_control_seats: 50 # Vice President Vance breaks ties
+  average: {half_life_days: 21, max_age_days: 365}
+  # Pollster house effects (538-style). Backtest 2026-11-03: adjusting AND
+  # including partisan polls failed (0.1928 -> 0.1977); pollster effects on
+  # nonpartisan polls only passed as a post-hoc split (0.1928 -> 0.1912, 3/4).
+  # Pooling leans across race types with 538 history priors (pooled: true,
+  # history: true) failed too: 0.1934 nonpartisan, 0.2001 with partisan polls.
+  # Post hoc: leans against past RESULTS (anchor: results) passed, nonpartisan
+  # 0.1928 -> 0.1871, but add nothing on top of fundamentals (0.1463 vs 0.1451).
+  # Off until you turn it on; partisan_weight 0 keeps partisan polls out.
+  house_effects: {enabled: false, partisan_weight: 0.0, prior_polls: 3.0, half_life_days: 45.0}
+  # Registered-voter gap: shift RV and adult polls by the cycle's measured
+  # RV-minus-LV gap from polls asking both. Passed alone on 2018-2024 (0.1927
+  # -> 0.1908, 4 of 4) but adds nothing on top of the live default, so off.
+  population_gap: {enabled: false, prior_pairs: 10}
+  # Weight polls by pollster accuracy (538 history). Failed (2018-2024 1 of 4).
+  accuracy_weights: {enabled: false, scale: 2.0}
+  # The NYT files record Nebraska's independent Dan Osborn as a Democrat.
+  party_overrides:
+    Nebraska: {Dan Osborn: IND}
+
+# House forecast: district lean from 2024 presidential results, shifted by
+# the national environment. Error sizes are uncalibrated assumptions.
+house:
+  cycle: 2026
+  n_sims: 20000
+  seed: 2026
+  # Where the national generic-ballot margin comes from:
+  #   auto: our own average if it has polls from the last 30 days, else aggregates
+  #   polls | aggregates | fixed (uses fixed_national_margin)
+  national_source: auto
+  fixed_national_margin: 0.0
+  # Harris minus Trump nationally in 2024. District lean = district margin minus this.
+  lean_baseline_margin: -1.5
+  incumbency_bonus: 1.5     # points toward the incumbent's party
+  national_sd: 3.0          # shared error: the whole House misses together
+  district_sd: 6.0          # independent error per district
+  t_df: 5
+  control_seats: 218

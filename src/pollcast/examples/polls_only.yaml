@@ -1,5 +1,7 @@
-# Plain polls-only forecast: the reference baseline.
-# Every assumption lives here; copy this file to change any of them.
+# A plain polls-only forecast: time-weighted averages and the simulation, no adjustments.
+# Generated from configs/reference.yaml by scripts/make_examples.py.
+# Every assumption lives here; edit freely. Turn an adjustment on only after
+# `pollcast backtest` shows it passing.
 name: polls-only
 data_dir: data
 
@@ -120,40 +122,40 @@ indicators:
   calibrated_errors:
     enabled: false
   undecided_stretch:
-    enabled: false   # failed its backtest
+    enabled: false
     prior_sd: 0.1   # shrinkage toward no effect (k = 1)
   # Second try, chosen AFTER seeing the first fail: it helped 0-30 days out
   # and hurt at 60-90. Because the cutoff came from the data, a pass here
   # is weaker evidence than a pass on the first try.
   undecided_stretch_late:
     module: undecided_stretch
-    enabled: true
+    enabled: false
     prior_sd: 0.1
     max_lead_days: 30
     post_hoc: "cutoff chosen after run 20261103T183404Z showed the effect reversing beyond 30 days"
   # Declared before testing: rain helps Republicans (Gomez, Hansford and Krause 2007).
   # Backtest uses observed rain (forecasts weren't archived), so a pass is an upper bound.
   election_day_rain:
-    enabled: false   # failed its backtest
+    enabled: false
     prior_sd: 3.0        # points per inch
     max_lead_days: 7     # weather forecasts reach about a week
   # Declared before testing: a souring economy costs the president's party.
   # Two variants of one module, so the page offers them as one choice.
   economy_sentiment:
     module: economy_vs_president
-    enabled: false   # failed its backtest
+    enabled: false
     series: UMCSENT
     prior_sd: 1.0        # points per unit of z (a 10-point sentiment drop)
   economy_gas:
     module: economy_vs_president
-    enabled: false   # failed its backtest
+    enabled: false
     series: GASREGW
     prior_sd: 1.0        # points per unit of z (a $0.50 rise)
   # Declared before testing: blending a fundamentals estimate (state lean,
   # incumbency, national generic ballot) with the polls improves held-out
   # log loss, most where polls are thin; b_lean > 0. Off until it passes and you turn it on.
   senate_fundamentals:
-    enabled: false   # superseded by senate_fundamentals_by_lead (better in both backtests)
+    enabled: false
     ridge: 1.0
   # Declared before testing: a late rise in the challenger's search share
   # (Google Trends, last 14 days vs the 14 before) means they beat their polls.
@@ -164,12 +166,12 @@ indicators:
   # together (sd_edu > 0), judged on the seat-count score since it changes
   # correlation, not each race's odds.
   education_correlation:
-    enabled: false   # passed 2018-2024 but failed 1998-2022
+    enabled: false
   # Post-hoc try: proposed after education_correlation's fit showed every
   # cycle's slope negative. Declared: beta < 0 (challengers run behind their
   # polls in high non-college-white states). Off unless it passes and you enable it.
   education_shift:
-    enabled: false   # passed 2018-2024 but failed 1998-2022 (0.2568 -> 0.2587)
+    enabled: false
     prior_sd: 1.0        # skeptical on purpose: tighter than the ~2-point slopes already seen
     post_hoc: "proposed after run 20261103T194249Z showed all four cycles' education slopes negative"
   # Declared before testing: the education correction scales with each
@@ -182,7 +184,7 @@ indicators:
   # accurate polls were at each lead time beats the fixed blend.
   senate_fundamentals_by_lead:
     module: senate_fundamentals
-    enabled: true    # default: best held-out combination (both backtests)
+    enabled: false
     ridge: 1.0
     lead_aware: true
   # Declared before testing (all three): see pollcast/indicators/polls_shape.py.
@@ -205,7 +207,7 @@ indicators:
   # election. Only the 2018-2024 replays have those lead times.
   spending_closeness_early:
     module: spending_closeness
-    enabled: true    # default: best combination 2018-2024 (0.1380 vs 0.1403); only acts 30+ days out
+    enabled: false
     prior_sd: 0.05
     min_lead_days: 30
     post_hoc: "30-day floor chosen after run on 2026-11-04 showed the gain fading from +0.009 at 60 days to +0.0008 at eve"

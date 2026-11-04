@@ -133,3 +133,17 @@ def test_main_challenger_picks_the_independent_when_he_is_the_real_opponent(tmp_
                                           AverageConfig(race_type="house", cycle=2026))
     assert challenger == "IND"
     assert margins["margin"].tolist() == [-6]
+
+
+def test_init_writes_starter_configs_that_load(tmp_path: Path):
+    from pollcast.cli import init_configs
+    from pollcast.config import load_config
+
+    assert init_configs(tmp_path / "configs") == 0
+    for name in ("polls_only", "polls_fundamentals", "reference"):
+        cfg = load_config(tmp_path / "configs" / f"{name}.yaml")
+        enabled = {k for k, v in cfg.indicators.items() if (v or {}).get("enabled")}
+        if name == "polls_only":
+            assert enabled == set()
+        if name == "polls_fundamentals":
+            assert enabled == {"senate_fundamentals_by_lead"}

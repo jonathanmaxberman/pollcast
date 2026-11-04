@@ -1,12 +1,14 @@
 # pollcast
 
-An open-source, reproducible toolkit for rolling your own US election
-forecast. It pulls public polls on a schedule into dated, never-overwritten
-snapshots, builds polling averages, and (in later milestones) backtests them
-and scores extra indicators out of sample.
+An open-source, reproducible toolkit for building your own US election
+forecast: poll averages, a Monte Carlo simulation of the Senate, House and
+governor races, backtests that replay past elections with no lookahead, and
+plug-in adjustments that are scored out of sample before they can change
+anything.
 
-Everything is driven by a YAML config, so you can change sources,
-assumptions and indicators without touching model code.
+Everything is driven by a YAML config. Change sources, assumptions or
+adjustments without touching model code, or write a module for a new idea
+and let the backtests tell you whether it works.
 
 **Live forecast** (the best model so far; updates as the model improves):
 [jonathanmaxberman.github.io/pollcast](https://jonathanmaxberman.github.io/pollcast/)
@@ -15,24 +17,38 @@ assumptions and indicators without touching model code.
 [interactive page](https://jonathanmaxberman.github.io/pollcast/predictions/2026-11-03/forecast.html) ·
 [numbers for every race](predictions/2026-11-03/PREDICTION.md).
 
-**Status: early.** Working today: snapshot storage, poll ingest from four
-sources into one normalized table, a daily GDELT news archive, a simple
-time-weighted average, and a Monte Carlo Senate forecast with an interactive
-map. Not yet: the Bayesian model, results data, backtests, indicators.
-
 ## Quick start
 
 ```bash
-uv sync
-uv run pollcast fetch                 # every enabled source in configs/polls_only.yaml
-uv run pollcast average --plot        # 2026 generic ballot
-uv run pollcast average --cycle 2022 --as-of 2022-11-07 --start 2022-01-01 --plot
-uv run pollcast build                 # write data/normalized/{polls,news}.parquet
-uv run pollcast map                   # Senate + House simulations -> data/output/forecast_2026.html
+pip install git+https://github.com/jonathanmaxberman/pollcast   # or: uv sync, from a clone
+pollcast init                   # writes configs/polls_only.yaml, polls_fundamentals.yaml, reference.yaml
+pollcast fetch --config configs/polls_only.yaml
+pollcast map --config configs/polls_only.yaml       # -> data/output/forecast_2026.html
 ```
 
-`--as-of` rebuilds the average using only polls that had been released by
-that date, so a past day's number can be reproduced exactly.
+The NYT poll files have to be downloaded by hand into `data/inputs/nyt/`
+(the Times blocks automated downloads); see [DATA.md](DATA.md) for every
+source, its terms, and which inputs are manual.
+
+Other commands:
+
+```bash
+pollcast average --cycle 2022 --as-of 2022-11-07 --plot   # a generic-ballot average as it stood then
+pollcast backtest                    # Senate 2018-2024 at 0-90 days out, every adjustment scored
+pollcast backtest --history          # election eve 1998-2022, about 1,600 races
+pollcast build                       # normalized Parquet tables, for DuckDB or pandas
+```
+
+`--as-of` anywhere rebuilds what was knowable on that date, so a past day's
+forecast can be reproduced exactly.
+
+## Extending it
+
+- **New data or a new idea:** [docs/writing-modules.md](docs/writing-modules.md)
+  covers data sources and adjustments, how they're scored, and the rules that
+  keep backtests honest.
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Data you can't fetch automatically:** [MANUAL_PROJECTS.md](MANUAL_PROJECTS.md).
 
 ## The forecast page
 
@@ -163,55 +179,24 @@ after a one-time form: download `1976-2024-house.tab` from
 https://doi.org/10.7910/DVN/IG0UN2 and set `house_path` under
 `mit_results` in the config.
 
-## Data sources
+## Data
 
-pollcast ships fetch scripts, not data. Each user pulls data under its own
-terms.
+pollcast ships code that fetches data, not the data itself; each user pulls
+every source under its own terms. [DATA.md](DATA.md) lists each source, its
+terms, and whether it can go in the shared snapshot archive built by
+`scripts/package_data.py`.
 
-| Source | Config key | Covers | Access |
-|---|---|---|---|
-| 538 archive (via Internet Archive) | `fivethirtyeight_archive` | 2018 to March 2025, all race types | Free; fetched once (538 shut down) |
-| FiftyPlusOne | `fiftyplusone` | 2025 onward | Subscription API key in `$FPO_API_KEY`; terms forbid redistribution |
-| New York Times | `nyt` | 2025 onward: Senate, House (incl. generic ballot), governor | Free with attribution; download the CSVs into `data/inputs/nyt/` (or set links) |
-| Electoral-vote.com | `electoral_vote` | Current-cycle Senate polls | Free; no sample sizes |
-| MIT Election Lab | `mit_results` | Certified Senate (and House) results, 1976-2024 | Public domain (CC0); House file needs a one-time form |
-| GDELT DOC 2.0 | `gdelt` | News volume and tone by keyword, last ~3 months | Free; archive daily |
-
-## Storage
-
-```
-data/raw/<source>/<YYYY-MM-DD>/<HHMMSSZ>/<files>   raw bytes as downloaded
-data/raw/<source>/<YYYY-MM-DD>/<HHMMSSZ>/_manifest.json   URLs, hashes, failures
-data/normalized/*.parquet                           derived; rebuild any time
-```
-
-Query the normalized tables with DuckDB:
-
-```bash
-uv run python -c "import duckdb; print(duckdb.sql(\"select race_type, cycle, count(distinct poll_id) from 'data/normalized/polls.parquet' group by all order by all\"))"
-```
-
-## The simple average
-
-For each day, each poll released by that day is weighted by recency
-(half-life `half_life_days` from the field midpoint), by sample size
-(`sqrt(n / reference_sample_size)`, capped), and down-weighted when one
-pollster has many recent polls. Partisan and internal polls are excluded by
-default. One population is used per poll, in `population_preference` order.
-See `src/pollcast/average.py`.
-
-## Adding a source
-
-Subclass `pollcast.sources.base.Source`, implement `fetch(writer)` and
-`normalize(snapshot)`, and register the class in `pollcast/sources/__init__.py`.
-`normalize` must return rows matching `pollcast.schema.POLL_COLUMNS` (or
-`NEWS_COLUMNS`), including a `release_date` so backtests stay free of
-lookahead.
+Raw files are kept as fetched under `data/raw/<source>/<date>/<time>/`, never
+overwritten, with a manifest of URLs and hashes; everything downstream can
+be rebuilt from them.
 
 ## Attribution
 
-Poll data: FiveThirtyEight (ABC News); The New York Times; FiftyPlusOne;
-Electoral-vote.com. News data: the GDELT Project.
+Poll data: The New York Times; FiveThirtyEight (ABC News); Electoral-vote.com;
+FiftyPlusOne. Results: MIT Election Data and Science Lab; The Downballot.
+Pollster history: FiveThirtyEight. Other data: GDELT, NOAA, the Federal
+Reserve Bank of St. Louis (ALFRED), the US Census Bureau, the Federal
+Election Commission, Google Trends.
 
 ## License
 
