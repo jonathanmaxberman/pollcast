@@ -34,7 +34,15 @@ jobs:
         run: |
           mkdir -p archive/data
           ln -s "$PWD/archive/data" data
-          uv run pollcast fetch gdelt
+          # GDELT rate-limits GitHub's shared runners, so some queries 429 most days.
+          # A partial day still can't be collected later: keep it, and fail only if nothing came back.
+          if ! uv run pollcast fetch gdelt; then
+            echo "::warning::GDELT fetch was partial (rate-limited); keeping what came back"
+          fi
+          today=$(date -u +%F)
+          n=$(find "data/raw/gdelt/$today" -type f ! -name _manifest.json 2>/dev/null | wc -l)
+          echo "kept $n GDELT files for $today"
+          [ "$n" -gt 0 ]
       - name: Commit snapshot
         working-directory: archive
         run: |
