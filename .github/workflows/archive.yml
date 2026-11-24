@@ -36,12 +36,13 @@ jobs:
           ln -s "$PWD/archive/data" data
           # GDELT rate-limits GitHub's shared runners, so some queries 429 most days.
           # A partial day still can't be collected later: keep it, and fail only if nothing came back.
+          # Count by file age, not date: a run that crosses midnight UTC writes under the start date.
+          touch "$RUNNER_TEMP/fetch-start"
           if ! uv run pollcast fetch gdelt; then
             echo "::warning::GDELT fetch was partial (rate-limited); keeping what came back"
           fi
-          today=$(date -u +%F)
-          n=$(find "data/raw/gdelt/$today" -type f ! -name _manifest.json 2>/dev/null | wc -l)
-          echo "kept $n GDELT files for $today"
+          n=$(find -L data/raw/gdelt -type f -newer "$RUNNER_TEMP/fetch-start" ! -name _manifest.json 2>/dev/null | wc -l)
+          echo "kept $n new GDELT files"
           [ "$n" -gt 0 ]
       - name: Commit snapshot
         working-directory: archive
