@@ -92,6 +92,39 @@ Each run writes `data/backtests/<run>/` (races, scores, calibration, the
 config hash) and adds a line to `data/backtests/log.csv`, so every attempt,
 including failures, stays on record.
 
+### After the 2026 midterms
+
+The published forecast (`predictions/2026-11-03/`) against the results
+(from Wikipedia on November 23, 2026; MIT's certified file replaces them
+once it's out): 31 of 35 Senate races called right, all four misses
+Democratic wins it didn't expect (Alaska, Iowa, South Carolina, Mississippi).
+Democrats beat the forecast margins by 5.3 points on average, and the House
+generic-ballot average (D+8.6) by about 5.5, a shared polling miss of
+roughly 1.8 times the national error the model allows. The raw poll averages
+did better than the adjusted forecast (Brier 0.044 vs 0.087): the
+fundamentals blend pulled Democratic leads toward Republicans in a year the
+polls already understated Democrats.
+
+Both backtests were rerun with 2026 added (Senate 2018-2026; election eve
+1998-2026, with 2026 rebuilt from this project's own poll archive). Held-out
+log loss:
+
+| Adjustment | 2018-2026 (5 cycles) | 1998-2026 eve (14 cycles) | 2026 alone |
+|---|---|---|---|
+| Undecided stretch, 30 days out or less | 0.2032 -> 0.2016, 4 of 5 | 0.2551 -> 0.2544, 12 of 14 | helped |
+| Fundamentals blend by lead time | 0.2032 -> 0.1912, 4 of 5 | 0.2551 -> 0.2547, 9 of 14 | hurt badly (0.244 -> 0.368) |
+| Early spending closeness | 0.2032 -> 0.2002, 4 of 5 | not testable | hurt slightly |
+| **All three (live default)** | **0.2032 -> 0.1888** | **0.2551 -> 0.2541, 11 of 14** | hurt (0.244 -> 0.370) |
+| Undecided + blend, no spending | 0.2032 -> 0.1889 | same as above | |
+
+All three still pass both tests and the combination is still the best, so
+the default is unchanged. The blend's margin shrank (on the 14-cycle test
+its gain fell from 0.0019 to 0.0004), so another year like 2026 would
+likely remove it. Nothing that failed before now passes both tests: gas
+prices, education shift and spending tilt now pass 2018-2026 but still fail
+the longer test, and calibrated error sizes do the reverse. The tables
+below are from before 2026 was added.
+
 ### Election-eve history, 1998-2022
 
 ```bash

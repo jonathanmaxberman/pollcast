@@ -30,6 +30,12 @@ If you know a source's terms better than this table, please open an issue.
 
 ## Inputs you download by hand
 
+Results for cycles MIT hasn't published yet go in a CSV listed under
+`mit_results: extra_results:` (columns: cycle, race_type, state, special,
+rep_pct, nonrep_pct, nonrep_party, dem_pct, margin, nonrep_won, source).
+The 2026 file was built from Wikipedia's results tables on November 23,
+2026, before certification; MIT's certified numbers replace it once fetched.
+
 Some sources need a file pollcast can't download for you; see
 `MANUAL_PROJECTS.md` for each and what it unlocks:
 

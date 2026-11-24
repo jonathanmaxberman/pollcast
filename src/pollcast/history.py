@@ -1,10 +1,12 @@
-"""Election-eve backtests over 1998-2022 from 538's pollster-ratings history.
+"""Election-eve backtests from 1998, from 538's pollster-ratings history.
 
 538's raw-polls file holds every poll it rated: polls from the final 21 days
 of Senate, governor, presidential and House races since 1998, each with the
 certified result. That is enough to replay election eve for about 1,700
 Democrat-vs-Republican races over 13 even-year cycles, against the 137
-Senate races the main backtest covers.
+Senate races the main backtest covers. Cycles after the file (2026 on) are
+rebuilt in the same shape from this project's own poll archive and the
+results in `mit_results: extra_results:` (see `recent_raw`).
 
 What it can't do: 30-90 day lead times (no earlier polls), unpolled races
 (only polled races are in the file), or anything needing data from after
@@ -45,7 +47,64 @@ def load_history(config: Config) -> pd.DataFrame:
     raw["race_type"] = raw["type_simple"].str.split("-").str[0].map(TYPES)
     # type_detail is e.g. Sen-G, Sen-GS (special), Sen-GR (runoff), Sen-GSR.
     raw["special"] = raw["type_detail"].str.split("-").str[1].fillna("").str.contains("S")
-    return raw
+    return pd.concat([raw, recent_raw(config, set(raw["year"]))], ignore_index=True)
+
+
+def recent_raw(config: Config, have: set[int]) -> pd.DataFrame:
+    """Cycles after 538's file, rebuilt in its shape from our own poll archive.
+
+    Uses the results in `mit_results: extra_results:` and, like 538's file,
+    only general-election Democrat-vs-Republican polls from the final 21 days
+    (plus that window's national generic-ballot polls). Pollster ids are 538's
+    where the source carries them, so house effects still line up.
+    """
+    from pollcast.backtest import extra_results
+    from pollcast.pipeline import build_polls
+
+    results = pd.concat([extra_results(config, rt) for rt in ("senate", "governor")], ignore_index=True)
+    if results.empty or "dem_pct" not in results:
+        return pd.DataFrame()
+    results = results[~results["cycle"].isin(have) & results["dem_pct"].notna()]
+    if results.empty:
+        return pd.DataFrame()
+    abbr = {v: k for k, v in STATE_NAMES.items()}
+    polls = build_polls(config)
+    keep = (polls["cycle"].isin(results["cycle"].unique()).to_numpy(dtype=bool, na_value=False)
+            & (polls["stage"] == "general").to_numpy(dtype=bool, na_value=False)
+            & polls["party"].isin(["DEM", "REP"]).to_numpy(dtype=bool, na_value=False))
+    polls = polls[keep].copy()
+    polls["state"] = polls["state"].fillna("").astype(str)
+    polls = polls.assign(polldate=polls["start_date"] + (polls["end_date"] - polls["start_date"]) / 2)
+    wide = (polls.groupby(["question_id", "party"], observed=True)["pct"].max().unstack("party")
+            .dropna(subset=["DEM", "REP"]))
+    meta = polls.drop_duplicates("question_id").set_index("question_id")
+    q = meta.join(wide, how="inner").reset_index()
+    rows = []
+    for cycle in sorted(results["cycle"].unique()):
+        eday = pd.Timestamp(election_day(int(cycle)))
+        win = q[(q["cycle"] == cycle) & (q["polldate"] >= eday - pd.Timedelta(days=21)) & (q["polldate"] < eday)]
+        targets = [(r.race_type, r.state, r.special, r.dem_pct - r.rep_pct)
+                   for r in results[results["cycle"] == cycle].itertuples()]
+        targets.append(("house", "US", False, np.nan))  # generic ballot, for the environment
+        for rt, state, special, actual in targets:
+            src = "generic" if rt == "house" else rt
+            g = win[(win["race_type"] == src) & ((win["state"] == "") if state == "US" else (win["state"] == state))]
+            if g.empty:
+                continue
+            loc = "US" if state == "US" else abbr.get(state, state)
+            code = {"senate": "Sen", "governor": "Gov", "house": "House"}[rt]
+            detail = f"{code}-G" + ("S" if special else "")
+            rows.append(pd.DataFrame({
+                "poll_id": g["poll_id"].astype(str), "question_id": g["question_id"].astype(str),
+                "pollster": g["pollster"], "pollster_rating_id": pd.to_numeric(g["pollster_rating_id"], errors="coerce"),
+                "partisan": g["partisan"].replace("", np.nan), "location": loc, "polldate": g["polldate"],
+                "samplesize": g["sample_size"].astype(float), "cand1_party": "DEM", "cand2_party": "REP",
+                "cand1_pct": g["DEM"].astype(float), "cand2_pct": g["REP"].astype(float),
+                "margin_poll": (g["DEM"] - g["REP"]).astype(float), "margin_actual": actual,
+                "year": int(cycle), "race": f"{cycle}_{detail}_{loc}", "type_simple": f"{code}-G",
+                "type_detail": detail, "race_type": rt, "special": bool(special),
+            }))
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 def _two_party(polls: pd.DataFrame) -> pd.DataFrame:
@@ -148,7 +207,7 @@ def results_anchored_effects(config: Config, cycles: list[int], **kw) -> dict[in
 
 
 def run_history_backtest(config: Config, n_sims: int = 5000) -> dict:
-    """Baseline, fitted error sizes, and adjustments over 1998-2022 at election eve."""
+    """Baseline, fitted error sizes, and adjustments at election eve, every cycle on file."""
     import json
     from datetime import UTC, datetime
 

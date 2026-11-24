@@ -77,3 +77,11 @@ of payoff for the effort.
 - [ ] **FiftyPlusOne subscription** ($8/month or $80/year). Generic-ballot
   and approval crosstabs for 2025-26, a second current poll source, and an
   API that can be automated (set `FPO_API_KEY`, enable `fiftyplusone`).
+
+## Swap in certified 2026 results
+
+`data/inputs/results_2026.csv` was built from Wikipedia on November 23,
+2026, before certification (two Louisiana House runoffs were still out).
+When MIT publishes its 2026 Senate file, run `pollcast fetch mit_results`:
+MIT's rows replace the CSV's automatically for the main backtest. Then
+rerun `pollcast backtest` and `pollcast backtest --history`.

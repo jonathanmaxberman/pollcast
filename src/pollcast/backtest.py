@@ -52,11 +52,33 @@ ELECTION_DAYS = {
 EPS = 1e-4  # probabilities are clipped to [EPS, 1 - EPS] before taking logs
 
 
+def extra_results(config: Config, race_type: str = "senate") -> pd.DataFrame:
+    """Results for cycles MIT hasn't published yet, from `mit_results: extra_results:` files.
+
+    Same columns as MIT's table plus race_type, dem_pct and source; one row
+    per race, the best non-Republican against the Republican.
+    """
+    files = (config.sources.get("mit_results") or {}).get("extra_results") or []
+    frames = [pd.read_csv(f) for f in files if Path(f).exists()]
+    if not frames:
+        return pd.DataFrame()
+    out = pd.concat(frames, ignore_index=True)
+    out = out[out["race_type"] == race_type].copy()
+    out["special"] = out["special"].astype(str).str.lower() == "true"
+    out["nonrep_won"] = out["nonrep_won"].astype(str).str.lower() == "true"
+    return out
+
+
 def senate_results(config: Config) -> pd.DataFrame:
     snap = latest_snapshot(config.data_dir, "mit_results")
     if snap is None:
         raise RuntimeError("backtest: run `pollcast fetch mit_results` first")
-    return SOURCES["mit_results"](config).normalize(snap)
+    mit = SOURCES["mit_results"](config).normalize(snap)
+    extra = extra_results(config, "senate")
+    if extra.empty:
+        return mit
+    extra = extra[~extra["cycle"].isin(mit["cycle"])]  # MIT's certified numbers win once they exist
+    return pd.concat([mit, extra[[c for c in mit.columns if c in extra.columns]]], ignore_index=True)
 
 
 def priors_for(results: pd.DataFrame, cycle: int) -> pd.DataFrame:

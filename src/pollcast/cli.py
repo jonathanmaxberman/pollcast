@@ -69,12 +69,12 @@ def main(argv: list[str] | None = None) -> int:
     p_night.add_argument("--fragment", action="store_true")
 
     p_bt = sub.add_parser("backtest", help="replay past Senate cycles and score the forecasts")
-    p_bt.add_argument("--cycles", type=int, nargs="+", default=[2018, 2020, 2022, 2024])
+    p_bt.add_argument("--cycles", type=int, nargs="+", default=[2018, 2020, 2022, 2024, 2026])
     p_bt.add_argument("--leads", type=int, nargs="+", default=[0, 7, 30, 60, 90],
                       help="days before election day to forecast from")
     p_bt.add_argument("--n-sims", type=int, default=5000)
     p_bt.add_argument("--history", action="store_true",
-                      help="election-eve backtest over 1998-2022 from 538's pollster-ratings history")
+                      help="election-eve backtest from 1998, from 538's pollster-ratings history plus newer results files")
 
     args = parser.parse_args(argv)
     if args.command == "init":
@@ -172,7 +172,8 @@ def main(argv: list[str] | None = None) -> int:
         from pollcast.history import run_history_backtest
 
         r = run_history_backtest(config, args.n_sims)
-        print("== election eve, 1998-2022, by race type")
+        cyc = sorted(r["races"]["cycle"].unique())
+        print(f"== election eve, {cyc[0]}-{cyc[-1]} ({len(cyc)} cycles), by race type")
         print(r["by_type"].to_string(index=False, float_format=lambda v: f"{v:.4f}"))
         print("fitted error sizes (all cycles):", {k: round(v, 2) for k, v in r["fitted"]["all_cycles"].items()})
         for name, ind in r["indicators"].items():

@@ -49,6 +49,9 @@ sources:
   # download it from https://doi.org/10.7910/DVN/IG0UN2 and set house_path.
   mit_results:
     enabled: true
+    # Results for cycles MIT hasn't published yet (same columns as MIT's
+    # table; see DATA.md). MIT's certified numbers replace these once fetched.
+    extra_results: [data/inputs/results_2026.csv]
     # house_path: data/inputs/mit/1976-2024-house.tab
 
   # Election-day precipitation by state: observed for past elections (NOAA
