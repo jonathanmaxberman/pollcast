@@ -1,0 +1,53 @@
+{
+  "source": "gdelt",
+  "fetched_at": "2026-11-24T21:11:11.380158+00:00",
+  "files": [
+    {
+      "file": "crime__timelinetone.json",
+      "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=\"crime\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinetone&format=json",
+      "bytes": 3423,
+      "sha256": "294f59024497f9b7b0791b3cd217ee93e7605339ea519e9f1e2d9ea66d8dfc59",
+      "keyword": "crime",
+      "mode": "timelinetone",
+      "country": "US"
+    },
+    {
+      "file": "gas-prices__timelinetone.json",
+      "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=\"gas prices\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinetone&format=json",
+      "bytes": 3414,
+      "sha256": "169a682e680e2f1a5e40cf856248cc81c3bcb1247e20696c5614611f439a472e",
+      "keyword": "gas prices",
+      "mode": "timelinetone",
+      "country": "US"
+    },
+    {
+      "file": "tariffs__timelinevolraw.json",
+      "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=\"tariffs\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinevolraw&format=json",
+      "bytes": 4075,
+      "sha256": "10b04d19e2da18ebf09d9dbb9405d157589359c56c1c17c16b87108c335aed5f",
+      "keyword": "tariffs",
+      "mode": "timelinevolraw",
+      "country": "US"
+    },
+    {
+      "file": "unemployment__timelinevolraw.json",
+      "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=\"unemployment\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinevolraw&format=json",
+      "bytes": 4050,
+      "sha256": "a32c1ac80a12885768814730bf441e5b6d435e23833cba86d7ba5894d9b7fe8a",
+      "keyword": "unemployment",
+      "mode": "timelinevolraw",
+      "country": "US"
+    }
+  ],
+  "failures": [
+    "'inflation' timelinevolraw: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"inflation\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinevolraw&format=json: 429",
+    "'inflation' timelinetone: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"inflation\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinetone&format=json: 429",
+    "'immigration' timelinevolraw: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"immigration\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinevolraw&format=json: 429",
+    "'immigration' timelinetone: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"immigration\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinetone&format=json: 429",
+    "'crime' timelinevolraw: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"crime\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinevolraw&format=json: 429",
+    "'gas prices' timelinevolraw: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"gas prices\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinevolraw&format=json: 429",
+    "'tariffs' timelinetone: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"tariffs\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinetone&format=json: 429",
+    "'unemployment' timelinetone: gdelt: failed to fetch https://api.gdeltproject.org/api/v2/doc/doc?query=\"unemployment\" sourcecountry:US &startdatetime=20260827000000&enddatetime=20261124000000&maxrecords=250&mode=timelinetone&format=json: 429"
+  ],
+  "attribution": "News coverage data from the GDELT Project."
+}
